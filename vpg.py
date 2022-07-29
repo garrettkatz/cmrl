@@ -6,9 +6,9 @@ from catmouse import CatMouseEnv
 if __name__ == "__main__":
 
     # training hyperparams
-    num_updates = 5000
-    verbose_period = 10
-    show_period = 1000
+    num_updates = 1000
+    verbose_period = 1
+    show_period = 100
     num_steps = 100
     horizon = 10
     discount = 0.001 ** (1 / horizon) # discount**horizon = 0.001
@@ -47,7 +47,7 @@ if __name__ == "__main__":
         log_prob = dist.log_prob(action).sum(dim=1)
         return action.numpy() * env.shape, log_prob
 
-    optimizer = tr.optim.SGD(net.parameters(), lr=0.001)
+    optimizer = tr.optim.SGD(net.parameters(), lr=0.00001)
 
     net_rewards = np.empty((num_updates, env.batch_size))
     grad_norms = np.empty(num_updates)
@@ -93,10 +93,19 @@ if __name__ == "__main__":
 
         optimizer.zero_grad()
 
-        for t in range(num_steps - horizon):
-            for th in range(1, horizon):
-                rewards[t] += rewards[t+th][0] * discount**th
+        # # full-episode reward
+        # (-tr.tensor(net_rewards[update]) * sum(log_probs.values())).mean().backward()
+
+        # reward to go
+        for t in reversed(range(num_steps-1)):
+            rewards[t] += rewards[t+1]
             (-tr.tensor(rewards[t]) * log_probs[t]).mean().backward()
+
+        # # discounted reward to go, doesn't work well (this implementation is not mathematically well-founded)
+        # for t in range(num_steps - horizon):
+        #     for th in range(1, horizon):
+        #         rewards[t] += rewards[t+th][0] * discount**th
+        #     (-tr.tensor(rewards[t]) * log_probs[t]).mean().backward()
 
         grad_norms[update] = sum((p.grad**2).sum() for p in net.parameters())**0.5
 
@@ -106,3 +115,20 @@ if __name__ == "__main__":
             print(f"{update}/{num_updates}: R~{net_rewards[update].mean()}, |g|~{grad_norms[update]}")
 
 
+    pt.close()
+    pt.ioff()
+    mean = net_rewards[:update].mean(axis=1)
+    if env.batch_size > 3:
+        stdev = net_rewards[:update].std(axis=1)
+        pt.fill_between(np.arange(update), mean-stdev, mean+stdev, color='b', alpha=0.5)
+    pt.plot(mean)
+    pt.show()
+
+    pt.ion()
+    observation = env.reset(
+        cp = cp,
+        cv = cv,
+        mp = mp,
+    )
+    with tr.no_grad():
+        env.animate(policy, num_steps, ax=pt.gca(), reset=False)
