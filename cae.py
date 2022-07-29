@@ -6,7 +6,7 @@ from catmouse import CatMouseEnv
 if __name__ == "__main__":
 
     num_explorations = 5000
-    num_updates = 20
+    num_updates = 50
     verbose_period = 50
     show_period = 1
     num_steps = 100
@@ -38,7 +38,13 @@ if __name__ == "__main__":
     alpha = 1.0
     net_rewards = np.empty((num_explorations, batch_size))
     final_errors = np.empty(num_explorations)
+
     net = tr.nn.Linear(8, 2)
+    # net = tr.nn.Sequential(
+    #     tr.nn.Linear(8, batch_size),
+    #     tr.nn.LeakyReLU(),
+    #     tr.nn.Linear(batch_size, 2),
+    # )
 
     for exploration in range(num_explorations):
 
@@ -73,6 +79,7 @@ if __name__ == "__main__":
         action = action.reshape(num_steps*batch_size, 2)
 
         optimizer = tr.optim.SGD(net.parameters(), lr=0.01)
+        # optimizer = tr.optim.Adam(net.parameters(), lr=0.01)
         errors = np.empty(num_updates)
         for update in range(num_updates):
             pred = net(tr.tensor(observation, dtype=tr.float))
