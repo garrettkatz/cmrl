@@ -30,7 +30,7 @@ if __name__ == "__main__":
         # random_cat = False,
         random_cat = True,
         # batch_size=256)
-        batch_size=512)
+        batch_size=1024)
 
     # Initial conditions
     # cp = 0.25*np.ones((env.batch_size, 2))*env.shape
@@ -43,6 +43,10 @@ if __name__ == "__main__":
         # tr.nn.Linear(8, 2),
 
         tr.nn.Linear(8,32),
+        tr.nn.LeakyReLU(),
+        tr.nn.Linear(32,32),
+        tr.nn.LeakyReLU(),
+        tr.nn.Linear(32,32),
         tr.nn.LeakyReLU(),
         tr.nn.Linear(32,2),
 
