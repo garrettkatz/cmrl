@@ -6,7 +6,7 @@ from catmouse import CatMouseEnv
 if __name__ == "__main__":
 
     # training hyperparams
-    num_updates = 1000
+    num_updates = 5000
     verbose_period = 1
     show_period = 100
     num_steps = 100
@@ -27,17 +27,25 @@ if __name__ == "__main__":
         spring = k/m,
         damping = b/m,
         dt = 1/24,
-        random_cat = False,
-        batch_size=256)
+        # random_cat = False,
+        random_cat = True,
+        # batch_size=256)
+        batch_size=512)
 
     # Initial conditions
-    cp = 0.25*np.ones((env.batch_size, 2))*env.shape
-    cv = np.tile(np.array([1., 0.]), (env.batch_size,1))*env.cat_speed
-    mp = 0.5*np.ones((env.batch_size, 2))*env.shape
+    # cp = 0.25*np.ones((env.batch_size, 2))*env.shape
+    # cv = np.tile(np.array([1., 0.]), (env.batch_size,1))*env.cat_speed
+    # mp = 0.5*np.ones((env.batch_size, 2))*env.shape
+    cp = cv = mp = None
 
     # Policy
     net = tr.nn.Sequential(
-        tr.nn.Linear(8, 2),
+        # tr.nn.Linear(8, 2),
+
+        tr.nn.Linear(8,32),
+        tr.nn.LeakyReLU(),
+        tr.nn.Linear(32,2),
+
         tr.nn.Sigmoid(),
     )
     def policy(observation):
