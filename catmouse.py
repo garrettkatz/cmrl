@@ -24,18 +24,19 @@ class CatMouseEnv(object):
         obs[b,6:8] is current mouse x,y velocity in episode b
     action: (batch_size, 2) array of actions
         act[b,:] is current target x,y position for mouse in episode b
-    reward: (batch_size, 1) array of rewards
+    reward: (batch_size,) array of rewards
         rew[b] is current distance between cat and mouse positions
 
     """
 
-    def __init__(self, width, height, cat_speed, spring, damping, dt, batch_size=1):
+    def __init__(self, width, height, cat_speed, spring, damping, dt, random_cat=True, batch_size=1):
         """
         (width, height): environment extends from 0 to width in the x-direction and 0 to height in the y-direction
         cat_speed: constant speed for cat (although direction changes)
         spring: k/m, where k is the spring constant and m is the spring mass emulated by the mouse motion
         damping: b/m, where b is the spring damping constant emulated by the mouse motion
         dt: small delta between time-steps used for Euler's method
+        random_cat: whether to randomly update cat direction
         batch_size: the number of episodes that are run in parallel
         
         For under-damped (oscillating) spring dynamics, use b < (4*m*k)**.5
@@ -48,6 +49,7 @@ class CatMouseEnv(object):
         self.spring = spring
         self.damping = damping
         self.dt = dt
+        self.random_cat = random_cat
         self.batch_size = batch_size
         self.shape = np.array([width, height])
         self.reset()
@@ -58,7 +60,7 @@ class CatMouseEnv(object):
         """
         return np.concatenate((self.cp, self.cv, self.mp, self.mv), axis=1)
 
-    def reset(self, seed=None, return_info=False, cp=None, cv=None, mp=None, mv=None):
+    def reset(self, cp=None, cv=None, mp=None, mv=None, seed=None, return_info=False):
         """
         Reset the environment to a new random initial state
         Random initial positions and velocities can be overwritten by passing any of:
@@ -87,7 +89,7 @@ class CatMouseEnv(object):
         """
         return np.maximum(0, np.minimum(position, self.shape))
 
-    def step(self, action, cat_walk=True):
+    def step(self, action):
         """
         Set the target mouse position and update the environment with one Euler step
         action: (batch_size, 2) array of target positions for the mouse in each episode
@@ -100,13 +102,12 @@ class CatMouseEnv(object):
         self.mv += ma * self.dt
 
         self.cp = self.bound(self.cp + self.cv * self.dt)
-        # random walk for cat
-        if cat_walk:
+        if self.random_cat:
             self.cv += np.random.randn(self.batch_size, 2)
             self.cv *= self.cat_speed / np.linalg.norm(self.cv, axis=1, keepdims=True)
 
         observation = self.current_observation()
-        reward = np.linalg.norm(self.cp - self.mp, axis=1, keepdims=True)
+        reward = np.linalg.norm(self.cp - self.mp, axis=1)
         done = False
         info = None
         return observation, reward, done, info
@@ -129,14 +130,15 @@ class CatMouseEnv(object):
         ax.text(self.mp[0,0], self.mp[0,1], "0")
         ax.text(self.cp[0,0], self.cp[0,1], "0")
 
-    def animate(self, policy, num_steps, ax):
+    def animate(self, policy, num_steps, ax, reset=True):
         """
         Animate multiple steps of environment using provided policy
         policy(observation) should return (action, log_probability)
         ax: the matplotlib Axes object for rendering
+        randomly resets unless reset==False
         All episodes in batch are animated on the same plot
         """
-        observation, info = self.reset(return_info=True)
+        observation = self.reset() if reset else self.current_observation()
         pt.ion()
         pt.show()
         for i in range(num_steps):
@@ -163,6 +165,7 @@ if __name__ == "__main__":
         spring = k/m,
         damping = b/m,
         dt = 1/24,
+        random_cat = True,
         batch_size=10)
 
     # Use same initial position and velocity for cat in all episodes
@@ -182,5 +185,9 @@ if __name__ == "__main__":
     policy = lambda obs: (action, None)
 
     # Animate the environment
-    env.animate(policy, num_steps=200, ax=pt.gca())
+    pt.figure(figsize=(4,4), constrained_layout=True)
+    env.animate(policy, num_steps=50, ax=pt.gca())
+
+    # Save the ending state
+    pt.savefig("catmouseenv.pdf")
 
