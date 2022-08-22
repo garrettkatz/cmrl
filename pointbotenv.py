@@ -15,7 +15,7 @@ class PointBotEnv(object):
     action: (batch_size, 2) array of actions
         act[b,:] is current target x,y position for bot in episode b
     reward: (batch_size,) array of rewards
-        rew[b] is current distance between bot and goal positions
+        rew[b] is current (negative) distance between bot and goal positions
 
     """
 
@@ -31,7 +31,7 @@ class PointBotEnv(object):
         
         For under-damped (oscillating) spring dynamics, use b < (4*m*k)**.5
         For faster bot motion, make k larger relative to m
-        
+
         """
         self.width = width
         self.height = height
@@ -46,7 +46,7 @@ class PointBotEnv(object):
 
         # gravity fields
         self.std = (np.array([[.3, -.3], [.9, .9]]) * self.shape).T / 5
-        self.mus = np.array([[0, 1], [.5, 0], [1, .5]])[:,np.newaxis,:] * self.shape
+        self.mus = np.array([[0, 1], [.5, 0], [1, .5]])[:,np.newaxis,np.newaxis,:] * self.shape
 
         self.reset()
 
@@ -58,11 +58,11 @@ class PointBotEnv(object):
 
     def gravity_field(self, position):
         """
-        Calculate gravity field at given position, a corresponding (batch_size, 2) array
+        Calculate gravity field at given position, a corresponding (num_pts, batch_size, 2) array
         """
-        diffs = position - self.mus
-        g = np.exp(-((diffs @ self.std) ** 2).sum(axis=2)).sum(axis=0) * self.gravity
-        return g[:,np.newaxis]
+        diffs = position - self.mus # (mus, num_pts, batch_size, 2)
+        g = np.exp(-((diffs @ self.std) ** 2).sum(axis=3, keepdims=True)).sum(axis=0) * self.gravity
+        return g
 
     def reset(self, p=None, v=None, seed=None, return_info=False):
         """
@@ -95,15 +95,17 @@ class PointBotEnv(object):
         action: (batch_size, 2) array of target positions for the bot in each episode
         """
 
+        g = self.gravity_field(self.p).reshape(self.batch_size, 1) # drop num_pts dimension
+
         action = self.bound(action)
         a = self.spring_coef * (action - self.p) - self.damping_coef * self.v
-        a += np.array([0, -1]) * self.gravity_field(self.p) / self.mass
+        a += np.array([0, -1]) * g / self.mass
 
         self.p = self.bound(self.p + self.v * self.dt)
         self.v = self.v + a * self.dt
 
         observation = self.current_observation()
-        reward = np.linalg.norm(self.goal - self.p, axis=1)
+        reward = -np.linalg.norm(self.goal - self.p, axis=1)
         done = False
         info = None
         return observation, reward, done, info
@@ -121,8 +123,8 @@ class PointBotEnv(object):
         spacing = np.linspace(0, 1, 100)
         xpt, ypt = np.meshgrid(spacing*self.shape[0], spacing*self.shape[1])
         pts = np.stack((xpt.flatten(), ypt.flatten()), axis=-1)
-        g = self.gravity_field(pts)
-        g = g.reshape(xpt.shape)
+        g = self.gravity_field(pts[:, np.newaxis, :])
+        g = g[:,0].reshape(xpt.shape)
         ax.contourf(xpt, ypt, g, levels = len(spacing), colors = np.array([1,1,1]) - spacing[:,np.newaxis] * np.array([0,1,1]))
 
         # b = 0 # only show first element of batch
@@ -146,28 +148,29 @@ class PointBotEnv(object):
         pt.ion()
         pt.show()
         for i in range(num_steps):
+            action, _ = policy(observation)
             pt.cla()
             self.plot(ax)
-            pt.pause(.01)            
-            action, _ = policy(observation)
+            ax.plot(action[:,0], action[:,1], 'mo')
+            pt.pause(.01)
             observation, reward, done, info = self.step(action)
 
 if __name__ == "__main__":
 
-    # Set up spring parameters for mouse motion
+    # Set up spring parameters for bot motion
     k = 2
     m = 1
     critical = (4*m*k)**.5 # critical damping point
     b = np.random.uniform(.25, .9)*critical # random underdamping
 
+    batch_size=10
     width = 5
     height = 5
-    gravity = 10
-    mass = m
-    spring_constant = k
-    damping = b
+    gravity = 10 + np.random.randn(batch_size, 1)
+    mass = m + np.random.randn(batch_size, 1) * 0.1
+    spring_constant = k + np.random.randn(batch_size, 1) * 0.1
+    damping = b + np.random.randn(batch_size, 1) * 0.1
     dt = 1/24
-    batch_size=10
 
     env = PointBotEnv(width, height, gravity, mass, spring_constant, damping, dt, batch_size)
     
@@ -176,7 +179,7 @@ if __name__ == "__main__":
     # pt.show()
 
     # policy = lambda obs: (np.broadcast_to(env.goal, (batch_size, 2)), None)
-    policy = lambda obs: (np.random.randn(batch_size, 2)*3 + env.goal, None)
+    policy = lambda obs: (env.bound(np.random.randn(batch_size, 2)*0.1 + env.goal), None)
 
     env.animate(policy, num_steps=100, ax=pt.gca(), reset=True)
 
