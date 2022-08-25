@@ -9,44 +9,44 @@ class PointBotEnv(object):
     Some areas of the environment exert external "gravity" force on the bot
     Several episodes can be batched and run "in parallel" using numpy vectorization:
     
-    observation: (batch_size, 4) array of state observations
-        obs[b,0:2] is current bot x,y position in episode b
-        obs[b,2:4] is current bot x,y velocity in episode b
-    action: (batch_size, 2) array of actions
-        act[b,:] is current target x,y position for bot in episode b
-    reward: (batch_size,) array of rewards
-        rew[b] is current (negative) distance between bot and goal positions
+    observation: (num_domains, batch_size, 4) array of state observations
+        obs[d,b,0:2] is current bot x,y position in episode b of domain d
+        obs[d,b,2:4] is current bot x,y velocity in episode b of domain d
+    action: (num_domains, batch_size, 2) array of actions
+        act[d, b,:] is current target x,y position for bot in episode b in domain d
+    reward: (num_domains, batch_size,) array of rewards
+        rew[d, b] is current (negative) distance between bot and goal positions in episode b of domain d
 
     """
 
-    def __init__(self, width, height, gravity, mass, spring_constant, damping, dt, batch_size=1):
+    def __init__(self, mass, gravity, restore, damping, control_rate, dt):
         """
-        (width, height): environment extends from 0 to width in the x-direction and 0 to height in the y-direction
-        gravity: maximum magnitude of "gravity" acceleration
-        mass: mass of the point bot
-        spring_constant: spring constant emulated by the bot motion
-        damping: damping constant emulated by the bot motion
-        dt: small delta between time-steps used for Euler's method
-        batch_size: the number of episodes that are run in parallel
+        Physical domain parameters, each with shape (num_domains,):
+            mass: mass of the point bot
+            gravity: maximum magnitude of "gravity" acceleration
+            restore: restoring constant of spring emulated by the bot motion
+            damping: damping constant of spring emulated by the bot motion
+            control_rate: number of simulation steps in between each action command
+            dt: small time delta between simulation steps used for Euler's method
         
-        For under-damped (oscillating) spring dynamics, use b < (4*m*k)**.5
-        For faster bot motion, make k larger relative to m
+        For under-damped (oscillating) spring dynamics, use damping < (4*mass*restore)**.5
+        For faster bot motion, make restore larger relative to mass
 
         """
-        self.width = width
-        self.height = height
-        self.gravity = gravity
-        self.mass = mass
-        self.spring_coef = spring_constant / mass
-        self.damping_coef = damping / mass
-        self.dt = dt
-        self.batch_size = batch_size
-        self.shape = np.array([width, height])
-        self.goal = np.ones((1, 2)) * self.shape * 0.9
+        self.mass = np.expand_dims(mass, axis=(1, 2))
+        self.gravity = np.expand_dims(gravity, axis=(1, 2))
+        self.restore = np.expand_dims(restore / mass, axis=(1, 2))
+        self.damping = np.expand_dims(damping / mass, axis=(1, 2))
+        self.dt = np.expand_dims(dt, axis=(1, 2))
+
+        self.control_rate = control_rate
+        self.num_domains = len(mass)
+
+        self.goal = np.ones(2) * 0.9
 
         # gravity fields
-        self.std = (np.array([[.3, -.3], [.9, .9]]) * self.shape).T / 5
-        self.mus = np.array([[0, 1], [.5, 0], [1, .5]])[:,np.newaxis,np.newaxis,:] * self.shape
+        self.std = np.array([[.3, -.3], [.9, .9]]).T * 10 # (2, 2)
+        self.mus = np.array([[0, 1], [.5, 0], [1, .5]]) # (num_mus, 2)
 
         self.reset()
 
@@ -54,28 +54,26 @@ class PointBotEnv(object):
         """
         Concatenate positions and velocities to form current observation
         """
-        return np.concatenate((self.p, self.v), axis=1)
+        return np.concatenate((self.p, self.v), axis=-1)
 
     def gravity_field(self, position):
         """
-        Calculate gravity field at given position, a corresponding (num_pts, batch_size, 2) array
+        Calculate gravity field at given position, (broadcastable to) a corresponding (num_domains, batch_size, 2) array
+        Returns g, a (num_domains, batch_size, 1) array of gravity magnitude at each position
         """
-        diffs = position - self.mus # (mus, num_pts, batch_size, 2)
+        diffs = position - np.expand_dims(self.mus, axis=(1,2)) # (num_mus, num_domains, batch_size, 2)
         g = np.exp(-((diffs @ self.std) ** 2).sum(axis=3, keepdims=True)).sum(axis=0) * self.gravity
         return g
 
-    def reset(self, p=None, v=None, seed=None, return_info=False):
+    def reset(self, batch_size=1, state=None, seed=None, return_info=False):
         """
         Reset the environment to a new initial state
-        Initial positions and velocities can be overwritten by passing any of:
-            p: bot position
-            v: bot velocity
-        Each should be a corresponding (batch_size, 2) array
+        state is a (num_domains, batch_size, 2) array
         """
 
         np.random.seed(seed)
-        self.p = p if p is not None else np.ones((self.batch_size, 2))*self.shape*0.1
-        self.v = v if v is not None else np.zeros((self.batch_size, 2))
+        self.p = state[:,:,:2] if state is not None else np.ones((self.num_domains, batch_size, 2)) * 0.1
+        self.v = state[:,:,2:] if state is not None else np.zeros((self.num_domains, batch_size, 2))
 
         observation = self.current_observation()
         info = None
@@ -83,29 +81,32 @@ class PointBotEnv(object):
         if return_info: return (observation, info)
         else: return observation
 
-    def bound(self, position):
+    def bound(self, points):
         """
-        Clip position to lie within the environment plane boundaries
+        Clip points to lie within the environment plane boundaries
         """
-        return np.maximum(0, np.minimum(position, self.shape))
+        return np.clip(points, 0, 1)
 
     def step(self, action):
         """
-        Set the target bot position and update the environment with one Euler step
-        action: (batch_size, 2) array of target positions for the bot in each episode
+        Set the target bot position and update the environment with Euler's method
+        action: (num_domains, batch_size, 2) array of target positions for the bot in each episode
         """
 
-        g = self.gravity_field(self.p).reshape(self.batch_size, 1) # drop num_pts dimension
-
         action = self.bound(action)
-        a = self.spring_coef * (action - self.p) - self.damping_coef * self.v
-        a += np.array([0, -1]) * g / self.mass
 
-        self.p = self.bound(self.p + self.v * self.dt)
-        self.v = self.v + a * self.dt
+        for cr in range(self.control_rate):
+
+            g = self.gravity_field(self.p)
+
+            a = self.restore * (action - self.p) - self.damping * self.v
+            a += np.array([0, -1]) * g / self.mass
+
+            self.p = self.bound(self.p + self.v * self.dt)
+            self.v = self.v + a * self.dt
 
         observation = self.current_observation()
-        reward = -np.linalg.norm(self.goal - self.p, axis=1)
+        reward = -np.linalg.norm(self.goal - self.p, axis=-1)
         done = False
         info = None
         return observation, reward, done, info
@@ -121,30 +122,32 @@ class PointBotEnv(object):
 
         # gravity field
         spacing = np.linspace(0, 1, 100)
-        xpt, ypt = np.meshgrid(spacing*self.shape[0], spacing*self.shape[1])
+        xpt, ypt = np.meshgrid(spacing, spacing)
         pts = np.stack((xpt.flatten(), ypt.flatten()), axis=-1)
-        g = self.gravity_field(pts[:, np.newaxis, :])
-        g = g[:,0].reshape(xpt.shape)
+        g = self.gravity_field(np.expand_dims(pts, axis=0)).mean(axis=0) # broadcast then average over domains
+        g = g.reshape(xpt.shape)
         ax.contourf(xpt, ypt, g, levels = len(spacing), colors = np.array([1,1,1]) - spacing[:,np.newaxis] * np.array([0,1,1]))
 
-        # b = 0 # only show first element of batch
-        b = slice(self.batch_size) # show all elements of batch
-        ax.plot([0, self.width, self.width, 0, 0], [0, 0, self.height, self.height, 0], 'k-')
-        ax.plot(self.p[b,0], self.p[b,1], 'bo')
-        ax.plot(self.goal[0,0], self.goal[0,1], 'go')
+        ax.plot([0, 1, 1, 0, 0], [0, 0, 1, 1, 0], 'k-')
+        ax.plot(self.p[:,:,0].flatten(), self.p[:,:,1].flatten(), 'bo')
+        ax.plot(self.goal[0], self.goal[1], 'go')
         
-        # mark cat and bot from episode 0
-        ax.text(self.p[0,0], self.p[0,1], "0")
+        # mark bot from episode 0
+        ax.text(self.p[0,0,0], self.p[0,0,1], "0")
 
-    def animate(self, policy, num_steps, ax, reset=True):
+    def animate(self, policy, num_steps, ax, reset_batch_size=None):
         """
         Animate multiple steps of environment using provided policy
         policy(observation) should return (action, log_probability)
         ax: the matplotlib Axes object for rendering
-        randomly resets unless reset==False
+        resets unless reset_batch_size == None
+        otherwise uses provided batch size for reset
         All episodes in batch are animated on the same plot
         """
-        observation = self.reset() if reset else self.current_observation()
+        if reset_batch_size is not None:
+            observation = self.reset(reset_batch_size)
+        else:
+            observation = self.current_observation()
         pt.ion()
         pt.show()
         for i in range(num_steps):
@@ -163,25 +166,27 @@ if __name__ == "__main__":
     critical = (4*m*k)**.5 # critical damping point
     b = np.random.uniform(.25, .9)*critical # random underdamping
 
-    batch_size=10
-    width = 5
-    height = 5
-    gravity = 10 + np.random.randn(batch_size, 1)
-    mass = m + np.random.randn(batch_size, 1) * 0.1
-    spring_constant = k + np.random.randn(batch_size, 1) * 0.1
-    damping = b + np.random.randn(batch_size, 1) * 0.1
-    dt = 1/24
+    num_domains = 3
+    batch_size = 4
 
-    env = PointBotEnv(width, height, gravity, mass, spring_constant, damping, dt, batch_size)
+    mass = m + np.random.randn(num_domains) * 0.1
+    gravity = 10 + np.random.randn(num_domains)
+    restore = k + np.random.randn(num_domains) * 0.1
+    damping = b + np.random.randn(num_domains) * 0.1
+
+    control_rate = 10
+    dt = 1/240 * np.ones(num_domains)
+
+    env = PointBotEnv(mass, gravity, restore, damping, control_rate, dt)
     
-    pt.figure(figsize=env.shape, constrained_layout=True)
+    pt.figure(figsize=(5, 5), constrained_layout=True)
     # env.plot(pt.gca())
     # pt.show()
 
-    # policy = lambda obs: (np.broadcast_to(env.goal, (batch_size, 2)), None)
-    policy = lambda obs: (env.bound(np.random.randn(batch_size, 2)*0.1 + env.goal), None)
+    policy = lambda obs: (np.broadcast_to(env.goal, (num_domains, batch_size, 2)), None)
+    # policy = lambda obs: (env.bound(np.random.randn(num_domains, batch_size, 2)*0.1 + env.goal), None)
 
-    env.animate(policy, num_steps=100, ax=pt.gca(), reset=True)
+    env.animate(policy, num_steps=200, ax=pt.gca(), reset_batch_size=batch_size)
 
     # Save the ending state
     pt.savefig("pointbotenv.png")
