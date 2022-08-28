@@ -1,4 +1,9 @@
-# Cat-mouse reinforcement learning
+# CMRL
 
-See `catmouse.py` for detailed explanation in the comments and an example in the `__main__` code block at bottom
+Cat-mouse and other toy reinforcement learning environments:
+
+- catmouseenv.py
+- pointbotenv.py
+
+See detailed explanations in the comments and examples in the `__main__` code block at bottom
 
