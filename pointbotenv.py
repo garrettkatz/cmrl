@@ -48,11 +48,18 @@ class PointBotEnv(object):
         self.control_rate = control_rate
         self.num_domains = len(mass)
 
-        self.goal = np.ones(2) * 0.9
+        # self.goal = np.ones(2) * 0.9
+
+        # # gravity field: sum of three Gaussians with equal variance
+        # self.std = np.array([[.3, -.3], [.9, .9]]).T * 10 # (2, 2)
+        # self.mus = np.array([[0, 1], [.5, 0], [1, .5]]) # (num_mus, 2)
+
+        self.goal = np.array([.99, .01])
 
         # gravity field: sum of three Gaussians with equal variance
-        self.std = np.array([[.3, -.3], [.9, .9]]).T * 8 # (2, 2)
-        self.mus = np.array([[0, 1], [.5, 0], [1, .5]]) # (num_mus, 2)
+        self.std = np.array([[.7, 0], [0, .25]]).T * 14 # (2, 2)
+        self.mus = np.array([[.25, 0], [.5, 1], [.75, 0]]) # (num_mus, 2)
+        self.drs = np.array([[-1, -1], [-1, 1], [-1, -1]]) # (num_mus, 2)
 
         self.reset()
 
@@ -65,11 +72,13 @@ class PointBotEnv(object):
     def gravity_field(self, position):
         """
         Calculate gravity field at given position, (broadcastable to) a corresponding (num_domains, batch_size, 2) array
-        Returns g, a (num_domains, batch_size, 1) array of gravity magnitude at each position
-        batch_size refers to the number of parallel episodes per domain
+        Returns g, a (num_domains, batch_size, 2) array of gravity acceleration vectors at each position
+        batch_size refers to the number of positions given per domain
         """
         diffs = position - np.expand_dims(self.mus, axis=(1,2)) # (num_mus, num_domains, batch_size, 2)
-        g = np.exp(-((diffs @ self.std) ** 2).sum(axis=3, keepdims=True)).sum(axis=0) * self.gravity
+        dirs = np.expand_dims(self.drs, axis=(1,2)) # (num_mus, num_domains, batch_size, 2)
+        # g = (np.exp(-((diffs @ self.std) ** 2).sum(axis=3, keepdims=True)) * dirs).sum(axis=0) * self.gravity
+        g = (np.exp(-((diffs @ self.std) ** 4).sum(axis=3, keepdims=True)) * dirs).sum(axis=0) * self.gravity
         return g
 
     def reset(self, batch_size=1, state=None, seed=None, return_info=False):
@@ -80,7 +89,7 @@ class PointBotEnv(object):
         """
 
         np.random.seed(seed)
-        self.p = state[:,:,:2] if state is not None else np.ones((self.num_domains, batch_size, 2)) * 0.1
+        self.p = state[:,:,:2] if state is not None else np.ones((self.num_domains, batch_size, 2)) * 0.
         self.v = state[:,:,2:] if state is not None else np.zeros((self.num_domains, batch_size, 2))
 
         observation = self.current_observation()
@@ -106,12 +115,9 @@ class PointBotEnv(object):
         # run several iterations of simulation for each "step" when actions are commanded
         for cr in range(self.control_rate):
 
-            # gravity
-            g = self.gravity_field(self.p)
-
             # acceleration from gravity and spring dynamics
             a = self.restore * (action - self.p) - self.damping * self.v
-            a += np.array([0, -1]) * g / self.mass
+            a += self.gravity_field(self.p) / self.mass
 
             # Euler updates to position and velocity
             self.p = self.bound(self.p + self.v * self.dt) # don't go outside the bounds
@@ -133,12 +139,13 @@ class PointBotEnv(object):
         Blue is bot, red is gravity, green is goal
         """
 
-        # gravity field
+        # gravity field magnitude
         spacing = np.linspace(0, 1, 100)
         xpt, ypt = np.meshgrid(spacing, spacing)
         pts = np.stack((xpt.flatten(), ypt.flatten()), axis=-1)
         g = self.gravity_field(np.expand_dims(pts, axis=0)).mean(axis=0) # broadcast then average over domains for visualization
-        g = g.reshape(xpt.shape)
+        g = np.linalg.norm(g, axis=-1) # get magnitude from acceleration vectors
+        g = g.reshape(xpt.shape) # reshape for contourf
         ax.contourf(xpt, ypt, g, levels = len(spacing), colors = np.array([1,1,1]) - spacing[:,np.newaxis] * np.array([0,1,1]))
 
         ax.plot([0, 1, 1, 0, 0], [0, 0, 1, 1, 0], 'k-')
@@ -165,13 +172,38 @@ class PointBotEnv(object):
             observation = self.current_observation()
         pt.ion()
         pt.show()
-        for i in range(num_steps):
+        reward = np.empty((num_steps,) + observation.shape[:2])
+        for t in range(num_steps):
             action, _ = policy(observation)
             pt.cla()
             self.plot(ax)
             ax.plot(action[:,:,0].flatten(), action[:,:,1].flatten(), 'mo')
             pt.pause(.01)
-            observation, reward, done, info = self.step(action)
+            observation, reward[t], done, info = self.step(action)
+        return reward
+
+class FixedPolicy:
+    def __init__(self, actions):
+        self.actions = actions
+        self.reset()
+    def reset(self):
+        self.t = -1
+    def __call__(self, observation):
+        self.t += 1
+        return (self.actions[self.t], None)
+
+def ExpertPolicy(num_steps):
+    actions = np.empty((num_steps, 1, 1, 2))
+    # actions[:50] = np.array([[[0, 1]]])
+    # actions[50:100] = np.array([[[.5, .25]]])
+    # actions[100:150] = np.array([[[1, 1]]])
+    # actions[150:] = np.array([[[1, 0]]])
+
+    actions[:50] = np.array([[[.1, .5]]])
+    actions[50:100] = np.array([[[1, .6]]])
+    actions[100:] = np.array([[[1, 0]]])
+
+    return FixedPolicy(actions)
 
 if __name__ == "__main__":
 
@@ -200,9 +232,8 @@ if __name__ == "__main__":
 
     # Some dummy policies (not optimized)
     
-    # bee-line to target at goal (may be outweighed by gravity)
+    # # bee-line to target at goal (may be outweighed by gravity)
     # policy = lambda obs: (np.broadcast_to(env.goal, (num_domains, batch_size, 2)), None)
-    policy = lambda obs: (np.broadcast_to(np.ones(env.goal.shape), (num_domains, batch_size, 2)), None)
 
     # # random targets near goal every step
     # policy = lambda obs: (env.bound(np.random.randn(num_domains, batch_size, 2)*0.1 + env.goal), None)
@@ -211,7 +242,12 @@ if __name__ == "__main__":
     # targets = np.random.rand(num_domains, batch_size, 2)
     # policy = lambda obs: (targets, None)
 
-    env.animate(policy, num_steps=200, ax=pt.gca(), reset_batch_size=batch_size)
+    # "expert" policy crafted by hand
+    policy = ExpertPolicy(num_steps=200)
+
+    reward = env.animate(policy, num_steps=200, ax=pt.gca(), reset_batch_size=batch_size)
+    print(reward)
+    print(reward.sum(axis=0))
 
     # Save the ending state
     pt.savefig("pointbotenv.png")

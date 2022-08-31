@@ -1,24 +1,14 @@
 import numpy as np
 import torch as tr
 import matplotlib.pyplot as pt
-from pointbotenv import PointBotEnv
-
-class FixedPolicy:
-    def __init__(self, actions):
-        self.actions = actions
-        self.reset()
-    def reset(self):
-        self.t = -1
-    def __call__(self, observation):
-        self.t += 1
-        return (self.actions[self.t], None)
+from pointbotenv import PointBotEnv, FixedPolicy
 
 if __name__ == "__main__":
 
-    num_episodes = 200
+    num_episodes = 100
     report_period = 10
     num_steps = 150
-    epsilon = .1
+    epsilon = .5
 
     # Set up spring parameters for bot motion
     k = 2
