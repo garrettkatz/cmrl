@@ -15,7 +15,7 @@ class FixedPolicy:
 
 if __name__ == "__main__":
 
-    num_episodes = 5000
+    num_episodes = 200
     report_period = 10
     num_steps = 150
     epsilon = .1
@@ -42,9 +42,9 @@ if __name__ == "__main__":
     T, obs_size, act_size = num_steps, 4, 2
 
     best_states = np.empty((T+1, num_domains, 1, obs_size))
-    best_actions = np.empty((T, num_domains, 1, act_size))
     best_rewards = np.empty((T, num_domains, 1))
     best_values = -np.inf * np.ones((num_domains, 1))
+    best_actions = np.random.rand() * np.ones((T, num_domains, 1, act_size))
 
     reward_curve = np.empty((num_episodes, num_domains))
     for episode in range(num_episodes):
@@ -57,7 +57,11 @@ if __name__ == "__main__":
         states[0] = env.reset(batch_size)
         for t in range(T):
             explore = np.flatnonzero(np.random.rand(batch_size) < epsilon)
-            actions[t][:, explore, :] = np.random.rand(num_domains, len(explore), act_size)
+            if t == 0:
+                actions[t][:, explore, :] = np.random.rand(num_domains, len(explore), act_size)
+            else:
+                # actions[t][:, explore, :] = actions[t-1][:, explore, :] * 0.9 + np.random.rand(num_domains, len(explore), act_size) * 0.1 # way worse!
+                actions[t][:, explore, :] = env.bound(actions[t-1][:, explore, :] + np.random.randn(num_domains, len(explore), act_size) * 0.1) # way better!
             states[t+1], rewards[t], _, _ = env.step(actions[t])
 
         # update best so far

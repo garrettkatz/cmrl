@@ -51,7 +51,7 @@ class PointBotEnv(object):
         self.goal = np.ones(2) * 0.9
 
         # gravity field: sum of three Gaussians with equal variance
-        self.std = np.array([[.3, -.3], [.9, .9]]).T * 10 # (2, 2)
+        self.std = np.array([[.3, -.3], [.9, .9]]).T * 8 # (2, 2)
         self.mus = np.array([[0, 1], [.5, 0], [1, .5]]) # (num_mus, 2)
 
         self.reset()
@@ -200,15 +200,16 @@ if __name__ == "__main__":
 
     # Some dummy policies (not optimized)
     
-    # # bee-line to target at goal (may be outweighed by gravity)
+    # bee-line to target at goal (may be outweighed by gravity)
     # policy = lambda obs: (np.broadcast_to(env.goal, (num_domains, batch_size, 2)), None)
+    policy = lambda obs: (np.broadcast_to(np.ones(env.goal.shape), (num_domains, batch_size, 2)), None)
 
     # # random targets near goal every step
     # policy = lambda obs: (env.bound(np.random.randn(num_domains, batch_size, 2)*0.1 + env.goal), None)
 
-    # bee-line to fixed random targets
-    targets = np.random.rand(num_domains, batch_size, 2)
-    policy = lambda obs: (targets, None)
+    # # bee-line to fixed random targets
+    # targets = np.random.rand(num_domains, batch_size, 2)
+    # policy = lambda obs: (targets, None)
 
     env.animate(policy, num_steps=200, ax=pt.gca(), reset_batch_size=batch_size)
 
