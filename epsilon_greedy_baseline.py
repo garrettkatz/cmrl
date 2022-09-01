@@ -5,10 +5,10 @@ from pointbotenv import PointBotEnv, FixedPolicy
 
 if __name__ == "__main__":
 
-    num_episodes = 100
+    num_episodes = 200
     report_period = 10
     num_steps = 150
-    epsilon = .5
+    epsilon = 1.
 
     # Set up spring parameters for bot motion
     k = 2
@@ -34,24 +34,30 @@ if __name__ == "__main__":
     best_states = np.empty((T+1, num_domains, 1, obs_size))
     best_rewards = np.empty((T, num_domains, 1))
     best_values = -np.inf * np.ones((num_domains, 1))
-    best_actions = np.random.rand() * np.ones((T, num_domains, 1, act_size))
+    # best_actions = np.random.rand() * np.ones((T, num_domains, 1, act_size))
+    best_deltas = np.zeros((T, num_domains, 1, act_size))
+    best_deltas[0] = np.random.rand() * np.ones((num_domains, 1, act_size))
 
     reward_curve = np.empty((num_episodes, num_domains))
     for episode in range(num_episodes):
 
-        actions = np.tile(best_actions, (1, 1, batch_size, 1))
+        # actions = np.tile(best_actions, (1, 1, batch_size, 1))
+        deltas = np.tile(best_deltas, (1, 1, batch_size, 1))
         states = np.empty((T+1, num_domains, batch_size, obs_size))
         rewards = np.empty((T, num_domains, batch_size))
 
-        # rollout with random actions epsilon of the time
-        states[0] = env.reset(batch_size)
+        # explore random deltas epsilon of the time
         for t in range(T):
             explore = np.flatnonzero(np.random.rand(batch_size) < epsilon)
             if t == 0:
-                actions[t][:, explore, :] = np.random.rand(num_domains, len(explore), act_size)
+                deltas[t][:, explore, :] = np.random.rand(num_domains, len(explore), act_size)
             else:
-                # actions[t][:, explore, :] = actions[t-1][:, explore, :] * 0.9 + np.random.rand(num_domains, len(explore), act_size) * 0.1 # way worse!
-                actions[t][:, explore, :] = env.bound(actions[t-1][:, explore, :] + np.random.randn(num_domains, len(explore), act_size) * 0.1) # way better!
+                deltas[t][:, explore, :] = np.random.randn(num_domains, len(explore), act_size) * 0.1
+
+        # rollout
+        actions = env.bound(deltas.cumsum(axis=0))
+        states[0] = env.reset(batch_size)
+        for t in range(T):
             states[t+1], rewards[t], _, _ = env.step(actions[t])
 
         # update best so far
@@ -60,7 +66,8 @@ if __name__ == "__main__":
         is_better = np.squeeze(np.take_along_axis(values, np.expand_dims(best_idx, axis=1), axis=1) > best_values) # (D,)
 
         best_states[:, is_better, 0, :] = np.take_along_axis(states, np.expand_dims(best_idx, axis=(0,2,3)), axis=2)[:, is_better, 0, :] # (T, D, 1, S)
-        best_actions[:, is_better, 0, :] = np.take_along_axis(actions, np.expand_dims(best_idx, axis=(0,2,3)), axis=2)[:, is_better, 0, :] # (T, D, 1, A)
+        # best_actions[:, is_better, 0, :] = np.take_along_axis(actions, np.expand_dims(best_idx, axis=(0,2,3)), axis=2)[:, is_better, 0, :] # (T, D, 1, A)
+        best_deltas[:, is_better, 0, :] = np.take_along_axis(deltas, np.expand_dims(best_idx, axis=(0,2,3)), axis=2)[:, is_better, 0, :] # (T, D, 1, A)
         best_rewards[:, is_better, 0] = np.take_along_axis(rewards, np.expand_dims(best_idx, axis=(0,2)), axis=2)[:, is_better, 0] # (T, D, 1)
         best_values[is_better, 0] = np.take_along_axis(values, np.expand_dims(best_idx, axis=1), axis=1)[is_better, 0] # (D, 1)
 
@@ -70,6 +77,8 @@ if __name__ == "__main__":
             print(f"{episode}/{num_episodes}: " + \
                 f"reward={reward_curve[episode].mean()}, " + \
             "")
+
+    best_actions = env.bound(best_deltas.cumsum(axis=0))
 
     pt.ioff()
 

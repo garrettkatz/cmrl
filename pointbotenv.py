@@ -57,8 +57,8 @@ class PointBotEnv(object):
         self.goal = np.array([.99, .01])
 
         # gravity field: sum of three Gaussians with equal variance
-        self.std = np.array([[.7, 0], [0, .25]]).T * 14 # (2, 2)
-        self.mus = np.array([[.25, 0], [.5, 1], [.75, 0]]) # (num_mus, 2)
+        self.std = np.array([[1., 0], [0, .15]]).T * 14 # (2, 2)
+        self.mus = np.array([[.2, 0], [.5, 1], [.8, 0]]) # (num_mus, 2)
         self.drs = np.array([[-1, -1], [-1, 1], [-1, -1]]) # (num_mus, 2)
 
         self.reset()
@@ -77,8 +77,8 @@ class PointBotEnv(object):
         """
         diffs = position - np.expand_dims(self.mus, axis=(1,2)) # (num_mus, num_domains, batch_size, 2)
         dirs = np.expand_dims(self.drs, axis=(1,2)) # (num_mus, num_domains, batch_size, 2)
-        # g = (np.exp(-((diffs @ self.std) ** 2).sum(axis=3, keepdims=True)) * dirs).sum(axis=0) * self.gravity
-        g = (np.exp(-((diffs @ self.std) ** 4).sum(axis=3, keepdims=True)) * dirs).sum(axis=0) * self.gravity
+        g = (np.exp(-((diffs @ self.std) ** 2).sum(axis=3, keepdims=True)) * dirs).sum(axis=0) * self.gravity
+        # g = (np.exp(-((diffs @ self.std) ** 4).sum(axis=3, keepdims=True)) * dirs).sum(axis=0) * self.gravity
         return g
 
     def reset(self, batch_size=1, state=None, seed=None, return_info=False):
@@ -194,14 +194,15 @@ class FixedPolicy:
 
 def ExpertPolicy(num_steps):
     actions = np.empty((num_steps, 1, 1, 2))
-    # actions[:50] = np.array([[[0, 1]]])
-    # actions[50:100] = np.array([[[.5, .25]]])
-    # actions[100:150] = np.array([[[1, 1]]])
-    # actions[150:] = np.array([[[1, 0]]])
 
-    actions[:50] = np.array([[[.1, .5]]])
-    actions[50:100] = np.array([[[1, .6]]])
-    actions[100:] = np.array([[[1, 0]]])
+    actions[:50] = np.array([[[0, 1]]])
+    actions[50:100] = np.array([[[.5, .25]]])
+    actions[100:150] = np.array([[[1, 1]]])
+    actions[150:] = np.array([[[1, 0]]])
+
+    # actions[:50] = np.array([[[.1, .5]]])
+    # actions[50:100] = np.array([[[1, .6]]])
+    # actions[100:] = np.array([[[1, 0]]])
 
     return FixedPolicy(actions)
 
