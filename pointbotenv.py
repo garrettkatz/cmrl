@@ -1,5 +1,7 @@
+import pickle as pk
 import numpy as np
 import matplotlib.pyplot as pt
+from fixed_policy import FixedPolicy
 
 class PointBotEnv(object):
     """
@@ -47,6 +49,8 @@ class PointBotEnv(object):
 
         self.control_rate = control_rate
         self.num_domains = len(mass)
+        self.obs_size = 4
+        self.act_size = 2
 
         # self.goal = np.ones(2) * 0.9
 
@@ -77,8 +81,8 @@ class PointBotEnv(object):
         """
         diffs = position - np.expand_dims(self.mus, axis=(1,2)) # (num_mus, num_domains, batch_size, 2)
         dirs = np.expand_dims(self.drs, axis=(1,2)) # (num_mus, num_domains, batch_size, 2)
-        g = (np.exp(-((diffs @ self.std) ** 2).sum(axis=3, keepdims=True)) * dirs).sum(axis=0) * self.gravity
-        # g = (np.exp(-((diffs @ self.std) ** 4).sum(axis=3, keepdims=True)) * dirs).sum(axis=0) * self.gravity
+        # g = (np.exp(-((diffs @ self.std) ** 2).sum(axis=3, keepdims=True)) * dirs).sum(axis=0) * self.gravity
+        g = (np.exp(-((diffs @ self.std) ** 4).sum(axis=3, keepdims=True)) * dirs).sum(axis=0) * self.gravity
         return g
 
     def reset(self, batch_size=1, state=None, seed=None, return_info=False):
@@ -129,31 +133,61 @@ class PointBotEnv(object):
         done = False
         info = None
         return observation, reward, done, info
-    
-    def plot(self, ax):
-        """
-        Render current state(s) with matplotlib
-        ax: the matplotlib Axes object on which to draw
-        
-        Current states of all episodes in all domains are drawn on the same plot
-        Blue is bot, red is gravity, green is goal
-        """
 
-        # gravity field magnitude
+    def run_episode(self, policy, num_steps, reset_batch_size=None):
+        """
+        Run multiple steps of environment using provided policy
+        policy(observation) should return (action, log_probability)
+            log_probability can be None if not using a policy gradient method
+        resets unless reset_batch_size == None
+            otherwise uses provided batch size for reset
+        """
+        if reset_batch_size is not None:
+            self.reset(reset_batch_size)
+        batch_size = self.p.shape[1]
+
+        observation = np.empty((num_steps+1, self.num_domains, batch_size, 4))
+        action = np.empty((num_steps, self.num_domains, batch_size, 2))
+        reward = np.empty((num_steps, self.num_domains, batch_size))
+
+        observation[0] = self.current_observation()
+        for t in range(num_steps):
+            action[t], _ = policy(observation)
+            observation[t+1], reward[t], done, info = self.step(action[t])
+        return observation, action, reward
+
+    def gravity_mesh(self):
         spacing = np.linspace(0, 1, 100)
         xpt, ypt = np.meshgrid(spacing, spacing)
         pts = np.stack((xpt.flatten(), ypt.flatten()), axis=-1)
         g = self.gravity_field(np.expand_dims(pts, axis=0)).mean(axis=0) # broadcast then average over domains for visualization
         g = np.linalg.norm(g, axis=-1) # get magnitude from acceleration vectors
         g = g.reshape(xpt.shape) # reshape for contourf
-        ax.contourf(xpt, ypt, g, levels = len(spacing), colors = np.array([1,1,1]) - spacing[:,np.newaxis] * np.array([0,1,1]))
+        return xpt, ypt, g
 
+    def plot(self, ax, state, gmesh=None):
+        """
+        Render given state(s) with matplotlib
+        ax: the matplotlib Axes object on which to draw
+        
+        Batch of states across episodes and domains are drawn on the same plot
+        Blue is bot, red is gravity, green is goal
+
+        Provide gmesh as returned by gravity_mesh to avoid recomputing
+        """
+
+        if gmesh is None: gmesh = self.gravity_mesh()
+        xpt, ypt, g = gmesh
+
+        p = state[:, :, :2]
+
+        ax.contourf(xpt, ypt, g, levels = 100, colors = np.array([1,1,1]) - np.linspace(0, 1, 100)[:,np.newaxis] * np.array([0,1,1]))
         ax.plot([0, 1, 1, 0, 0], [0, 0, 1, 1, 0], 'k-')
-        ax.plot(self.p[:,:,0].flatten(), self.p[:,:,1].flatten(), 'bo')
+        ax.plot(p[:,:,0].flatten(), p[:,:,1].flatten(), 'bo')
         ax.plot(self.goal[0], self.goal[1], 'go')
         
         # mark bot from episode 0 of domain 0
-        ax.text(self.p[0,0,0], self.p[0,0,1], "0")
+        ax.text(p[0,0,0], p[0,0,1], "0")
 
     def animate(self, policy, num_steps, ax, reset_batch_size=None):
         """
@@ -166,49 +200,36 @@ class PointBotEnv(object):
             otherwise uses provided batch size for reset
         All episodes in batch are animated on the same plot
         """
-        if reset_batch_size is not None:
-            observation = self.reset(reset_batch_size)
-        else:
-            observation = self.current_observation()
+
+        observation, action, reward = self.run_episode(policy, num_steps, reset_batch_size)
+        gmesh = self.gravity_mesh()
         pt.ion()
         pt.show()
-        reward = np.empty((num_steps,) + observation.shape[:2])
         for t in range(num_steps):
-            action, _ = policy(observation)
             pt.cla()
-            self.plot(ax)
-            ax.plot(action[:,:,0].flatten(), action[:,:,1].flatten(), 'mo')
+            self.plot(ax, observation[t], gmesh)
+            ax.plot(action[t,:,:,0].flatten(), action[t,:,:,1].flatten(), 'mo')
             pt.pause(.01)
-            observation, reward[t], done, info = self.step(action)
         return reward
 
-def sample_domains(num_domains):
+    @staticmethod
+    def sample_domains(num_domains):
+    
+        # Set up spring parameters for bot motion
+        k = 2
+        m = 1
+        critical = (4*m*k)**.5 # critical damping point
+        b = np.random.uniform(.25, .9)*critical # random underdamping
+    
+        mass = m + np.random.rand(num_domains) * 0.3
+        gravity = 5 + np.random.rand(num_domains) * 10
+        restore = k + np.random.rand(num_domains) * 0.3
+        damping = b + np.random.rand(num_domains) * 0.3 * b
+    
+        control_rate = 10
+        dt = 1/240 * np.ones(num_domains)
 
-    # Set up spring parameters for bot motion
-    k = 2
-    m = 1
-    critical = (4*m*k)**.5 # critical damping point
-    b = np.random.uniform(.25, .9)*critical # random underdamping
-
-    mass = m + np.random.randn(num_domains) * 0.1
-    gravity = 10 + np.random.randn(num_domains)
-    restore = k + np.random.randn(num_domains) * 0.1
-    damping = b + np.random.randn(num_domains) * 0.1
-
-    control_rate = 10
-    dt = 1/240 * np.ones(num_domains)
-
-    return mass, gravity, restore, damping, control_rate, dt
-
-class FixedPolicy:
-    def __init__(self, actions):
-        self.actions = actions
-        self.reset()
-    def reset(self):
-        self.t = -1
-    def __call__(self, observation):
-        self.t += 1
-        return (self.actions[self.t], None)
+        return PointBotEnv(mass, gravity, restore, damping, control_rate, dt)
 
 def ExpertPolicy(num_steps):
     actions = np.empty((num_steps, 1, 1, 2))
@@ -224,14 +245,12 @@ def ExpertPolicy(num_steps):
 
     return FixedPolicy(actions)
 
-if __name__ == "__main__":
-
+def main():
 
     num_domains = 3
     batch_size = 4
 
-    mass, gravity, restore, damping, control_rate, dt = sample_domains(num_domains)
-    env = PointBotEnv(mass, gravity, restore, damping, control_rate, dt)
+    env = PointBotEnv.sample_domains(num_domains)
     
     pt.figure(figsize=(5, 5), constrained_layout=True)
     # env.plot(pt.gca())
@@ -256,6 +275,7 @@ if __name__ == "__main__":
     print(reward)
     print(reward.sum(axis=0))
 
-    # Save the ending state
-    pt.savefig("pointbotenv.png")
+    # # Save the ending state
+    # pt.savefig("pointbotenv.png")
 
+if __name__ == "__main__": main()

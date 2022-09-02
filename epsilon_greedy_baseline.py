@@ -1,21 +1,11 @@
 import numpy as np
 import torch as tr
 import matplotlib.pyplot as pt
-from pointbotenv import PointBotEnv, FixedPolicy, sample_domains
+from pointbotenv import PointBotEnv, FixedPolicy
 
-if __name__ == "__main__":
+def epsilon_greedy(epsilon, num_episodes, num_steps, env, batch_size, report_period):
 
-    num_episodes = 200
-    report_period = 10
-    num_steps = 150
-    epsilon = 1.
-
-    num_domains = 1
-    batch_size = 64
-
-    mass, gravity, restore, damping, control_rate, dt = sample_domains(num_domains)
-    env = PointBotEnv(mass, gravity, restore, damping, control_rate, dt)
-
+    num_domains = env.num_domains
     T, obs_size, act_size = num_steps, 4, 2
 
     best_states = np.empty((T+1, num_domains, 1, obs_size))
@@ -66,6 +56,22 @@ if __name__ == "__main__":
             "")
 
     best_actions = env.bound(best_deltas.cumsum(axis=0))
+    policy = FixedPolicy(best_actions)
+    return policy, reward_curve
+
+
+def main():
+
+    num_episodes = 20
+    report_period = 10
+    num_steps = 150
+    epsilon = 1.
+
+    num_domains = 1
+    batch_size = 64
+
+    env = PointBotEnv.sample_domains(num_domains)
+    policy, reward_curve = epsilon_greedy(epsilon, num_episodes, num_steps, env, batch_size, report_period)
 
     pt.ioff()
 
@@ -78,10 +84,9 @@ if __name__ == "__main__":
     pt.figure()
     pt.ion()
 
-    policy = FixedPolicy(best_actions)
-    env.animate(policy, T, ax=pt.gca(), reset_batch_size=1)
+    env.animate(policy, num_steps, ax=pt.gca(), reset_batch_size=1)
 
-
+if __name__ == "__main__": main()
 
 
 
