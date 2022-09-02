@@ -182,6 +182,24 @@ class PointBotEnv(object):
             observation, reward[t], done, info = self.step(action)
         return reward
 
+def sample_domains(num_domains):
+
+    # Set up spring parameters for bot motion
+    k = 2
+    m = 1
+    critical = (4*m*k)**.5 # critical damping point
+    b = np.random.uniform(.25, .9)*critical # random underdamping
+
+    mass = m + np.random.randn(num_domains) * 0.1
+    gravity = 10 + np.random.randn(num_domains)
+    restore = k + np.random.randn(num_domains) * 0.1
+    damping = b + np.random.randn(num_domains) * 0.1
+
+    control_rate = 10
+    dt = 1/240 * np.ones(num_domains)
+
+    return mass, gravity, restore, damping, control_rate, dt
+
 class FixedPolicy:
     def __init__(self, actions):
         self.actions = actions
@@ -208,23 +226,11 @@ def ExpertPolicy(num_steps):
 
 if __name__ == "__main__":
 
-    # Set up spring parameters for bot motion
-    k = 2
-    m = 1
-    critical = (4*m*k)**.5 # critical damping point
-    b = np.random.uniform(.25, .9)*critical # random underdamping
 
     num_domains = 3
     batch_size = 4
 
-    mass = m + np.random.randn(num_domains) * 0.1
-    gravity = 10 + np.random.randn(num_domains)
-    restore = k + np.random.randn(num_domains) * 0.1
-    damping = b + np.random.randn(num_domains) * 0.1
-
-    control_rate = 10
-    dt = 1/240 * np.ones(num_domains)
-
+    mass, gravity, restore, damping, control_rate, dt = sample_domains(num_domains)
     env = PointBotEnv(mass, gravity, restore, damping, control_rate, dt)
     
     pt.figure(figsize=(5, 5), constrained_layout=True)

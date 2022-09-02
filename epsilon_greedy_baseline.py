@@ -1,7 +1,7 @@
 import numpy as np
 import torch as tr
 import matplotlib.pyplot as pt
-from pointbotenv import PointBotEnv, FixedPolicy
+from pointbotenv import PointBotEnv, FixedPolicy, sample_domains
 
 if __name__ == "__main__":
 
@@ -10,23 +10,10 @@ if __name__ == "__main__":
     num_steps = 150
     epsilon = 1.
 
-    # Set up spring parameters for bot motion
-    k = 2
-    m = 1
-    critical = (4*m*k)**.5 # critical damping point
-    b = np.random.uniform(.25, .9)*critical # random underdamping
-
     num_domains = 1
     batch_size = 64
 
-    mass = m + np.random.randn(num_domains) * 0.1
-    gravity = 10 + np.random.randn(num_domains)
-    restore = k + np.random.randn(num_domains) * 0.1
-    damping = b + np.random.randn(num_domains) * 0.1
-
-    control_rate = 10
-    dt = 1/240 * np.ones(num_domains)
-
+    mass, gravity, restore, damping, control_rate, dt = sample_domains(num_domains)
     env = PointBotEnv(mass, gravity, restore, damping, control_rate, dt)
 
     T, obs_size, act_size = num_steps, 4, 2
