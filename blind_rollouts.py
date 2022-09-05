@@ -3,7 +3,7 @@ import torch as tr
 import matplotlib.pyplot as pt
 from fixed_policy import FixedPolicy
 
-def blind_rollouts(epsilon, num_episodes, num_steps, env, batch_size, report_period):
+def blind_rollouts(epsilon, stdev, num_updates, num_steps, env, batch_size, report_period):
 
     num_domains, obs_size, act_size = env.num_domains, env.obs_size, env.act_size
     T = num_steps
@@ -13,8 +13,8 @@ def blind_rollouts(epsilon, num_episodes, num_steps, env, batch_size, report_per
     best_deltas = np.zeros((T, 1, act_size))
     best_deltas[0] = np.random.rand(1, act_size)
 
-    reward_curve = np.empty((num_episodes, num_domains))
-    for episode in range(num_episodes):
+    reward_curve = np.empty((num_updates, num_domains))
+    for episode in range(num_updates):
 
         states = np.empty((T+1, num_domains, batch_size, obs_size))
         rewards = np.empty((T, num_domains, batch_size))
@@ -26,7 +26,7 @@ def blind_rollouts(epsilon, num_episodes, num_steps, env, batch_size, report_per
             if t == 0:
                 deltas[t][explore, :] = np.random.rand(len(explore), act_size)
             else:
-                deltas[t][explore, :] = np.random.randn(len(explore), act_size) * 0.1
+                deltas[t][explore, :] = np.random.randn(len(explore), act_size) * stdev
 
         # rollout
         actions = env.bound(deltas.cumsum(axis=0)).reshape(T, 1, batch_size, act_size) # broadcast over domains
@@ -46,7 +46,7 @@ def blind_rollouts(epsilon, num_episodes, num_steps, env, batch_size, report_per
         reward_curve[episode] = best_values
 
         if episode % report_period == 0:
-            print(f"{episode}/{num_episodes}: " + \
+            print(f"{episode}/{num_updates}: " + \
                 f"reward={best_values.mean()} (+/- {best_values.std()}), " + \
             "")
 
@@ -59,16 +59,17 @@ def main():
 
     from pointbotenv import PointBotEnv, FixedPolicy
 
-    num_episodes = 500
+    num_updates = 50
     report_period = 10
     num_steps = 150
     epsilon = 1.
+    stdev = 0.1
 
     num_domains = 2
     batch_size = 32
 
     env = PointBotEnv.sample_domains(num_domains)
-    policy, reward_curve = blind_rollouts(epsilon, num_episodes, num_steps, env, batch_size, report_period)
+    policy, reward_curve = blind_rollouts(epsilon, stdev, num_updates, num_steps, env, batch_size, report_period)
 
     pt.ioff()
 
@@ -78,10 +79,11 @@ def main():
     pt.show()
     pt.close()
 
-    pt.figure()
-    pt.ion()
-
-    env.animate(policy, num_steps, ax=pt.gca(), reset_batch_size=1)
+    episodes = env.run_episode(policy, num_steps, reset_batch_size=1)
+    reward = env.animate(episodes)
+    print(reward)
+    print(reward.sum(axis=0))
+    pt.show()
 
 if __name__ == "__main__": main()
 

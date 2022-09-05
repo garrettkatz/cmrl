@@ -12,7 +12,7 @@ if __name__ == "__main__":
     ntest = 1
 
     epsilon = 1.
-    num_episodes = 500
+    num_updates = 500
     num_steps = 150
     batch_size = 32
     report_period = 10

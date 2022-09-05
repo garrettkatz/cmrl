@@ -1,6 +1,7 @@
 import pickle as pk
 import numpy as np
 import matplotlib.pyplot as pt
+from matplotlib.animation import FuncAnimation
 from fixed_policy import FixedPolicy
 
 class PointBotEnv(object):
@@ -152,7 +153,7 @@ class PointBotEnv(object):
 
         observation[0] = self.current_observation()
         for t in range(num_steps):
-            action[t], _ = policy(observation)
+            action[t], _ = policy(observation[t])
             observation[t+1], reward[t], done, info = self.step(action[t])
         return observation, action, reward
 
@@ -189,27 +190,48 @@ class PointBotEnv(object):
         # mark bot from episode 0 of domain 0
         ax.text(p[0,0,0], p[0,0,1], "0")
 
-    def animate(self, policy, num_steps, ax, reset_batch_size=None):
+    def animate(self, episodes, force_close=False):
         """
-        Animate multiple steps of environment using provided policy
+        Animate provided episode batch
         policy(observation) should return (action, log_probability)
             log_probability can be None if not using a policy gradient method
         target positions are shown in magenta
-        ax: the matplotlib Axes object for rendering
+        fig: the matplotlib Figure object for rendering
         resets unless reset_batch_size == None
             otherwise uses provided batch size for reset
         All episodes in batch are animated on the same plot
         """
 
-        observation, action, reward = self.run_episode(policy, num_steps, reset_batch_size)
-        gmesh = self.gravity_mesh()
-        pt.ion()
+        fig = pt.figure(figsize=(5, 5), constrained_layout=True)
+
+        observation, action, reward = episodes
+        num_steps = len(action)
+        p = observation[:,:,:,:2]
+
+        xpt, ypt, g = self.gravity_mesh()
+        pt.contourf(xpt, ypt, g, levels = 100, colors = np.array([1,1,1]) - np.linspace(0, 1, 100)[:,np.newaxis] * np.array([0,1,1]))
+        pt.plot(self.goal[0], self.goal[1], 'go')
+        pt.plot([0, 1, 1, 0, 0], [0, 0, 1, 1, 0], 'k-')
+
+        pos, = pt.plot(p[0,:,:,0].flatten(), p[0,:,:,1].flatten(), 'bo')
+        act, = pt.plot(action[0,:,:,0].flatten(), action[0,:,:,1].flatten(), 'mo')
+        num = pt.text(p[0,0,0,0], p[0,0,0,1], "0")
+
+        def func(t):
+            # mark bot from episode 0 of domain 0
+            pos.set_data(p[t,:,:,0].flatten(), p[t,:,:,1].flatten())
+            act.set_data(action[t,:,:,0].flatten(), action[t,:,:,1].flatten())
+            num.set_position((p[t,0,0,0], p[t,0,0,1]))
+
+            if t + 1 == num_steps:
+                if force_close: pt.close(fig)
+                else: pt.title("animation finished, close fig")
+
+            return [pos, act, num]
+
+        ani = FuncAnimation(fig, func, frames=num_steps, interval=1000/24, blit=True, repeat=False)
         pt.show()
-        for t in range(num_steps):
-            pt.cla()
-            self.plot(ax, observation[t], gmesh)
-            ax.plot(action[t,:,:,0].flatten(), action[t,:,:,1].flatten(), 'mo')
-            pt.pause(.01)
+
         return reward
 
     @staticmethod
@@ -249,10 +271,11 @@ def main():
 
     num_domains = 3
     batch_size = 4
+    num_steps = 200
 
     env = PointBotEnv.sample_domains(num_domains)
     
-    pt.figure(figsize=(5, 5), constrained_layout=True)
+    # fig = pt.figure(figsize=(5, 5), constrained_layout=True)
     # env.plot(pt.gca())
     # pt.show()
 
@@ -269,9 +292,11 @@ def main():
     # policy = lambda obs: (targets, None)
 
     # "expert" policy crafted by hand
-    policy = ExpertPolicy(num_steps=200)
+    policy = ExpertPolicy(num_steps=num_steps)
 
-    reward = env.animate(policy, num_steps=200, ax=pt.gca(), reset_batch_size=batch_size)
+    episodes = env.run_episode(policy, num_steps, reset_batch_size=batch_size)
+
+    reward = env.animate(episodes)
     print(reward)
     print(reward.sum(axis=0))
 
