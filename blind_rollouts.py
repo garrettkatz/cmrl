@@ -59,7 +59,7 @@ def main():
 
     from pointbotenv import PointBotEnv, FixedPolicy
 
-    num_updates = 50
+    num_updates = 100
     report_period = 10
     num_steps = 150
     epsilon = 1.
