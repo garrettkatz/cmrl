@@ -41,11 +41,11 @@ def main():
     from pointbotenv import PointBotEnv
 
     # hyperparams
-    num_updates = 1000
+    num_updates = 500
     report_period = 10
     num_steps = 150
-    stdev = 0.5
-    learning_rate = 0.01
+    stdev = 0.1
+    learning_rate = 0.1
     num_domains = 1
     batch_size = 64
 
@@ -98,15 +98,15 @@ def main():
     policy = Policy(linnet, stdev)
     optimizer = tr.optim.SGD(linnet.parameters(), lr=learning_rate)
 
-    # visualize untrained rollouts
-    with tr.no_grad():
-        states, actions, rewards = env.run_episode(policy, num_steps, batch_size)
-    xpt, ypt, g = env.gravity_mesh()
-    pt.contourf(xpt, ypt, g, levels = 100, colors = np.array([1,1,1]) - np.linspace(0, 1, 100)[:,np.newaxis] * np.array([0,1,1]))
-    for d in range(env.num_domains):
-        for b in range(batch_size):
-            pt.plot(states[:,d,b,0], states[:,d,b,1], 'b.')
-    pt.show()
+    # # visualize untrained rollouts
+    # with tr.no_grad():
+    #     states, actions, rewards = env.run_episode(policy, num_steps, batch_size)
+    # xpt, ypt, g = env.gravity_mesh()
+    # pt.contourf(xpt, ypt, g, levels = 100, colors = np.array([1,1,1]) - np.linspace(0, 1, 100)[:,np.newaxis] * np.array([0,1,1]))
+    # for d in range(env.num_domains):
+    #     for b in range(batch_size):
+    #         pt.plot(states[:,d,b,0], states[:,d,b,1], 'b.')
+    # pt.show()
 
     # run the training
     policy, reward_curve = vanilla_policy_gradient(env, policy, optimizer, num_updates, num_steps, batch_size, report_period)
