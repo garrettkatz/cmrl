@@ -1,7 +1,7 @@
 import numpy as np
 import torch as tr
 import matplotlib.pyplot as pt
-from fixed_policy import FixedPolicy
+from policies import FixedPolicy
 
 def blind_rollouts(epsilon, stdev, num_updates, num_steps, env, batch_size, report_period):
 

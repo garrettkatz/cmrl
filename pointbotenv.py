@@ -2,7 +2,7 @@ import pickle as pk
 import numpy as np
 import matplotlib.pyplot as pt
 from matplotlib.animation import FuncAnimation
-from fixed_policy import FixedPolicy
+from policies import FixedPolicy
 
 class PointBotEnv(object):
     """
