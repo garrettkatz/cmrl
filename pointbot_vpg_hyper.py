@@ -102,6 +102,7 @@ def main():
         pt.xlabel('episodes')
         pt.legend()
         pt.tight_layout()
+        pt.savefig("results_pointbot_vpg_hyper.png")
         pt.show()
 
 if __name__ == "__main__": main()
