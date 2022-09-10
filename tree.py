@@ -27,16 +27,19 @@ class StateActionTree:
         return np.stack([self.states[d, nodes[d]] for d in range(self.env.num_domains)])
         # return self.states[self.used].reshape(self.env.num_domains, -1, self.env.obs_size)
 
-    def add_leaves(self, parents, states, actions):
-        # parents: (D,)
+    def add_children(self, nodes, states, actions):
+        # nodes: (D,)
         # states: (D, B, S)
         # actions: (D, B, A)
-        for d in range(len(parents)):
-            idx = np.flatnonzero(~self.used[d])[:states.shape[1]]
-            self.parents[d, idx] = parents[d]
-            self.states[d, idx, :] = states
-            self.actions[d, idx, :] = actions
-            self.used[d, idx] = True
+        # children: (D, B)
+        children = np.empty(states.shape[:2], dtype=int)
+        for d in range(len(nodes)):
+            children[d] = np.flatnonzero(~self.used[d])[:len(children[d])]
+            self.parents[d, children[d]] = nodes[d]
+            self.states[d, children[d], :] = states[d]
+            self.actions[d, children[d], :] = actions[d]
+            self.used[d, children[d]] = True
+        return children
 
     def children_of(self, nodes):
         # nodes: (D,)
@@ -55,18 +58,17 @@ if __name__ == "__main__":
     env = PointBotEnv.sample_domains(num_domains)
     tree = StateActionTree(env, capacity)
 
-    # shouldn't be relying on n
-    # once leaves are deleted, tree.used is non-contiguous
-    # need to settle tree API passing node indices in and out
-
+    nodes = tree.get_nodes()
     for n in range(100):
-        nodes = tree.get_nodes()
-        states = tree.get_states(nodes)
-        actions = np.random.randn(num_domains, 1, env.act_size)
+        states = tree.get_states(nodes[:,:1])
+        actions = np.random.randn(num_domains, 2, env.act_size)
 
-        env.reset(state = states[:, [n]])
+        env.reset(state = states)
         new_states, _, _, _ = env.step(actions)
-        tree.add_leaves(n * np.ones(num_domains, dtype=int), new_states, actions)
+        nodes = tree.add_children(nodes[:,:1], new_states, actions)
+
+    nodes = tree.get_nodes()
+    states = tree.get_states(nodes)
     
     xpt, ypt, g = env.gravity_mesh()
     pt.contourf(xpt, ypt, g, levels = 100, colors = np.array([1,1,1]) - np.linspace(0, 1, 100)[:,np.newaxis] * np.array([0,1,1]))
