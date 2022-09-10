@@ -235,21 +235,18 @@ class PointBotEnv(object):
         return reward
 
     @staticmethod
-    def sample_domains(num_domains):
+    def sample_domains(num_domains, k=2, m=1, g=5, control_rate=10, dt = 1/240):
     
         # Set up spring parameters for bot motion
-        k = 2
-        m = 1
         critical = (4*m*k)**.5 # critical damping point
         b = np.random.uniform(.25, .9)*critical # random underdamping
     
         mass = m + np.random.rand(num_domains) * 0.3
-        gravity = 5 + np.random.rand(num_domains) * 10
+        gravity = g * (1 + 2*np.random.rand(num_domains))
         restore = k + np.random.rand(num_domains) * 0.3
         damping = b + np.random.rand(num_domains) * 0.3 * b
     
-        control_rate = 10
-        dt = 1/240 * np.ones(num_domains)
+        dt = dt * np.ones(num_domains)
 
         return PointBotEnv(mass, gravity, restore, damping, control_rate, dt)
 

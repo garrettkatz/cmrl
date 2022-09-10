@@ -9,7 +9,7 @@ from pointbotenv import PointBotEnv
 def main():
 
     do_train = True
-    do_show = False
+    do_show = True
 
     # fixed hyperparams
     report_period = 10
@@ -55,7 +55,8 @@ def main():
                 tr.nn.Sigmoid(),
             )
             policy = NormalPolicy(linnet, stdev)
-            optimizer = tr.optim.SGD(linnet.parameters(), lr=learning_rate)
+            # optimizer = tr.optim.SGD(linnet.parameters(), lr=learning_rate)
+            optimizer = tr.optim.Adam(linnet.parameters(), lr=learning_rate)
     
             # save trajectories of untrained policy (fixed batch size for consistent visualization)
             with tr.no_grad():
