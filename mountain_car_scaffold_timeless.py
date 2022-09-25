@@ -51,6 +51,7 @@ def main():
     # pt.ion()
 
     for t in range(num_steps):
+        print(f"{t} of {num_steps}")
 
         P = len(states)
         child_actions = rng.uniform(-1, 1, (P, branching, 1)).astype(np.float32)

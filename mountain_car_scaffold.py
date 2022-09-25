@@ -11,10 +11,10 @@ def draw(states, parents, radii):
 
     # parent-child edges
     for t in range(num_steps):
-        # segments[i][j,:2] = (x,y) for jth point in ith line
-        segments = np.stack((states[t-1][parents[t]], states[t]), axis=1)
-        # pt.gca().add_collection(LineCollection(segments, colors=colors[t], linestyle='-', alpha=0.2))
-        pt.gca().add_collection(LineCollection(segments, colors=colors[t], linestyle='-'))
+        # # segments[i][j,:2] = (x,y) for jth point in ith line
+        # segments = np.stack((states[t-1][parents[t]], states[t]), axis=1)
+        # # pt.gca().add_collection(LineCollection(segments, colors=colors[t], linestyle='-', alpha=0.2))
+        # pt.gca().add_collection(LineCollection(segments, colors=colors[t], linestyle='-'))
         pt.plot(states[t][:,0], states[t][:,1], '.', color=colors[t])
 
     # # child circles
@@ -33,8 +33,8 @@ def draw(states, parents, radii):
 def main():
 
     num_steps = 200
-    branching = 4
-    sampling = 32
+    branching = 5
+    sampling = 64
 
     rng = np.random.default_rng()
 
@@ -50,6 +50,7 @@ def main():
     # pt.ion()
 
     for t in range(num_steps):
+        print(f"step {t} of {num_steps}")
 
         P = len(states[t-1])
         child_actions = rng.uniform(-1, 1, (P, branching, 1)).astype(np.float32)

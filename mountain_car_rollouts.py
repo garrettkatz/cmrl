@@ -19,7 +19,7 @@ def run(env, actions):
 
 def main():
 
-    num_rollouts = 100
+    num_rollouts = 64 * 8 # comparable computational expense to beam size 64 with branching 8
     num_steps = 200
     walk_stdev = 0.1
 

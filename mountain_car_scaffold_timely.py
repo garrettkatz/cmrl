@@ -104,9 +104,9 @@ def main():
         states = all_states[subsample]
         paths = [all_paths[s] for s in subsample]
 
-        pt.cla()
-        draw(states, paths)
-        # input('.')
+        # pt.cla()
+        # draw(states, paths)
+        # # input('.')
 
     env.close()
 
