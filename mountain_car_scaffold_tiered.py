@@ -25,8 +25,8 @@ def main():
 
     num_steps = 200
     branching = 4
-    beam = 16
-    sampling = 16
+    beam = 8
+    sampling = 8
 
     rng = np.random.default_rng()
 
@@ -49,9 +49,8 @@ def main():
                 env.state = states[t][p].copy()
                 child_states[p,b], _, _, _, _ = env.step(child_actions[p,b])
         child_states = child_states.reshape(-1, 2)
-        C = len(child_states)
 
-        if C < beam:
+        if len(child_states) < beam:
             states.append(child_states)
             continue
 
@@ -60,16 +59,16 @@ def main():
         #    https://doi.org/10.1137/15M1051300 | https://arxiv.org/pdf/1411.7819.pdf
         #    https://doi.org/10.1016/0304-3975(85)90224-5
 
-        all_states = np.concatenate([child_states] + states, axis=0)
-        dists = np.linalg.norm(child_states[:,np.newaxis,:] - all_states[np.newaxis,:,:], axis=2)
-        included = np.ones(len(all_states), dtype=bool)
-        included[:C] = False
-        A = len(all_states) - C
-        if A > sampling:
-            idx = np.random.choice(A, size=sampling, replace=False)
-            included[C:] = False
-            included[C + idx] = True
-        excluded = list(range(C))
+        previous_states = np.concatenate(states, axis=0)
+        if len(previous_states) > sampling:
+            subsample = np.random.choice(len(previous_states), size=sampling, replace=False)
+            previous_states = previous_states[subsample]
+        bkgd_states = np.concatenate((child_states, previous_states), axis=0)
+
+        dists = np.linalg.norm(child_states[:,np.newaxis,:] - bkgd_states[np.newaxis,:,:], axis=2)
+        included = np.ones(len(bkgd_states), dtype=bool)
+        included[:len(child_states)] = False
+        excluded = list(range(len(child_states)))
 
         a = dists[:,included].min(axis=1).argmax()
         included[excluded.pop(a)] = True
@@ -78,8 +77,8 @@ def main():
             a = dists[excluded][:,included].min(axis=1).argmax()
             included[excluded.pop(a)] = True
 
-        subsample = np.flatnonzero(included[:C])
-        states.append(child_states[subsample])
+        new_states = child_states[included[:len(child_states)]]
+        states.append(new_states)
 
         # pt.cla()
         # draw(states)
