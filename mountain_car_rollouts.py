@@ -39,6 +39,8 @@ def main():
     walk_states, walk_rewards = run(env, walk_actions)
     env.close()
 
+    print(f"total steps = {num_steps}*{num_rollouts} = {num_steps*num_rollouts}")
+
     for r in range(num_rollouts):
         pt.plot(uniform_states[r, :, 0].flatten(), uniform_states[r, :, 1].flatten(), 'b.-')
         pt.plot(walk_states[r, :, 0].flatten(), walk_states[r, :, 1].flatten(), 'r.-')

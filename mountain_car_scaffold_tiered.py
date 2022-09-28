@@ -28,12 +28,16 @@ def main():
     beam = 8
     sampling = 8
 
+    do_walk = True
+    walk_stdev = 0.1
+
     rng = np.random.default_rng()
 
     env = gym.make("MountainCarContinuous-v0").unwrapped
     init_state, _ = env.reset()
 
     states = [init_state[np.newaxis,:]]
+    actions = [np.nan * np.ones((1, 1))]
 
     pt.ion()
 
@@ -41,17 +45,23 @@ def main():
         print(f"step {t} of {num_steps}...")
 
         P = len(states[t])
-        child_actions = rng.uniform(-1, 1, (P, branching, 1)).astype(np.float32)
         child_states = np.empty((P, branching, 2), dtype=np.float32)
+        if t == 0 or not do_walk:
+            child_actions = rng.uniform(-1, 1, (P, branching, 1)).astype(np.float32)
+        else:
+            child_actions = np.random.randn(P, branching, 1).astype(np.float32) * walk_stdev
+            child_actions += actions[t][:, np.newaxis, :]
 
         for p in range(P):
             for b in range(branching):
                 env.state = states[t][p].copy()
-                child_states[p,b], _, _, _, _ = env.step(child_actions[p,b])
+                child_states[p,b], _, _, _, _ = env.step(np.clip(child_actions[p,b], -1, 1))
         child_states = child_states.reshape(-1, 2)
+        child_actions = child_actions.reshape(-1, 1)
 
         if len(child_states) < beam:
             states.append(child_states)
+            actions.append(child_actions)
             continue
 
         # set-difference farthest point algorithm
@@ -77,14 +87,18 @@ def main():
             a = dists[excluded][:,included].min(axis=1).argmax()
             included[excluded.pop(a)] = True
 
+        new_actions = child_actions[included[:len(child_states)]]
         new_states = child_states[included[:len(child_states)]]
         states.append(new_states)
+        actions.append(new_actions)
 
         # pt.cla()
         # draw(states)
         # # input('.')
 
     env.close()
+
+    print(f"total steps = {num_steps}*{beam}*{branching} = {num_steps*beam*branching}")
 
     pt.ioff()
     pt.cla()
