@@ -1,4 +1,4 @@
-import time
+from time import perf_counter
 import numpy as np
 import matplotlib.pyplot as pt
 from matplotlib.collections import LineCollection, PatchCollection
@@ -21,33 +21,22 @@ def draw(states):
     pt.pause(0.01)
     pt.show()
 
-def main():
+def scaffold_gr(env, init_state, num_steps, beam, branching, walk_stdev = None):
 
-    num_steps = 200
-    branching = 4
-    beam = 8
-    sampling = 8
-
-    do_walk = True
-    walk_stdev = 0.1
+    sampling = beam
 
     rng = np.random.default_rng()
-
-    env = gym.make("MountainCarContinuous-v0").unwrapped
-    # init_state, _ = env.reset()
-    init_state = env.reset()
 
     states = [init_state[np.newaxis,:]]
     actions = [np.nan * np.ones((1, 1))]
 
-    pt.ion()
-
+    total_steps = 0
     for t in range(num_steps):
-        print(f"step {t} of {num_steps}...")
+        # print(f"step {t} of {num_steps}...")
 
         P = len(states[t])
         child_states = np.empty((P, branching, 2), dtype=np.float32)
-        if t == 0 or not do_walk:
+        if t == 0 or walk_stdev is None:
             child_actions = rng.uniform(-1, 1, (P, branching, 1)).astype(np.float32)
         else:
             child_actions = np.random.randn(P, branching, 1).astype(np.float32) * walk_stdev
@@ -56,7 +45,11 @@ def main():
         for p in range(P):
             for b in range(branching):
                 env.state = states[t][p].copy()
-                child_states[p,b], _, _, _ = env.step(np.clip(child_actions[p,b], -1, 1))
+                child_states[p,b], _, terminated, _ = env.step(np.clip(child_actions[p,b], -1, 1))
+                total_steps += 1
+                if terminated:
+                    return None, total_steps, True
+
         child_states = child_states.reshape(-1, 2)
         child_actions = child_actions.reshape(-1, 1)
 
@@ -93,23 +86,41 @@ def main():
         states.append(new_states)
         actions.append(new_actions)
 
-        # pt.cla()
-        # draw(states)
-        # # input('.')
+    return None, total_steps, False
+
+def main():
+
+    num_reps = 30
+    branching = 8
+    num_steps = 999
+    max_steps = num_steps * 32 * 8 # comparable computational expense to beam * branching
+    walk_stdev = 0.1
+
+    env = gym.make("MountainCarContinuous-v0").unwrapped
+
+    success = np.empty(num_reps, dtype=bool)
+    success_indicator = np.zeros((num_reps, max_steps))
+    run_times = np.nan * np.ones(num_reps)
+    for rep in range(num_reps):
+        print(f"rep {rep} of {num_reps}")
+        # init_state, _ = env.reset() # newer gym returns info
+        init_state = env.reset()
+        for beam in [2, 4, 8, 16, 32]:
+
+            start = perf_counter()
+            actions, total_steps, success[rep] = scaffold_gr(env, init_state, num_steps, beam, branching)
+            if success[rep]:
+                print(total_steps)
+                run_times[rep] = perf_counter() - start
+                success_indicator[rep, total_steps:] = 1
+                break
 
     env.close()
 
-    print(f"total steps = {num_steps}*{beam}*{branching} = {num_steps*beam*branching}")
-
     import pickle as pk
-    with open("mcst.pkl","wb") as f: pk.dump(states, f)
-
-    pt.ioff()
-    pt.cla()
-    draw(states)
-
-    # env = gym.make("MountainCarContinuous-v0", render_mode="human")
-    # state, _ = env.reset()
+    with open("mcgr.pkl","wb") as f: pk.dump((success_indicator, success, run_times), f)
 
 if __name__ == "__main__": main()
+
+
 
