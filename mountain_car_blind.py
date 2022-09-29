@@ -17,7 +17,8 @@ def blind_search(env, initial_state, num_steps, max_rollouts, walk_stdev = None)
 
         env.state = initial_state
         for t in range(num_steps):
-            state, reward, terminated, _, _ = env.step(actions[t])
+            # state, reward, terminated, _, _ = env.step(actions[t]) # newer gym returns info
+            state, reward, terminated, _ = env.step(actions[t])
             if terminated:
                 return actions[:t+1], r+1, True
 
@@ -27,7 +28,7 @@ def main():
 
     num_reps = 30
     max_rollouts = 32 * 8 # comparable computational expense to beam * branching
-    num_steps = 200
+    num_steps = 999
     walk_stdev = 0.1
 
     env = gym.make("MountainCarContinuous-v0").unwrapped
@@ -37,7 +38,8 @@ def main():
     run_times = np.empty((num_reps, 2))
     for rep in range(num_reps):
         print(f"rep {rep} of {num_reps}")
-        init_state, _ = env.reset()
+        # init_state, _ = env.reset() # newer gym returns info
+        init_state = env.reset()
         for dw, do_walk in enumerate((False, True)):
             stdev = walk_stdev if do_walk else None
             start = perf_counter()
@@ -66,10 +68,17 @@ def main():
     ax.set_xlabel("Num env steps")
 
     pt.subplot(2,1,2)
-    uni_xpts = np.sort(run_times[success[:,0],0])
-    uni = np.triu(np.ones((num_reps, len(uni_xpts))))
-    rw_xpts = np.sort(run_times[success[:,1],1])
-    rw = np.triu(np.ones((num_reps, len(rw_xpts))))
+    uni_xpts = np.concatenate(([0.], np.sort(run_times[success[:,0],0])))
+    rw_xpts = np.concatenate(([0.], np.sort(run_times[success[:,1],1])))
+    uni = np.triu(np.ones((num_reps, len(uni_xpts))), k=1)
+    rw = np.triu(np.ones((num_reps, len(rw_xpts))), k=1)
+    if rw_xpts[-1] > uni_xpts[-1]:
+        uni_xpts = np.append(uni_xpts, [rw_xpts[-1]])
+        uni = np.concatenate((uni, uni[:,-1:]), axis=1)
+    elif rw_xpts[-1] < uni_xpts[-1]:
+        rw_xpts = np.append(rw_xpts, [uni_xpts[-1]])
+        rw = np.concatenate((rw, rw[:,-1:]), axis=1)
+
 
     uni_avg, rw_avg = uni.mean(axis=0), rw.mean(axis=0)
     uni_std, rw_std = uni.std(axis=0), rw.std(axis=0)
@@ -79,11 +88,11 @@ def main():
     ax.fill_between(uni_xpts, uni_avg-uni_std, uni_avg+uni_std, color='r', alpha=0.2)
     ax.fill_between(rw_xpts, rw_avg-rw_std, rw_avg+rw_std, color='b', alpha=0.2)
 
-    ax.plot(uni_xpts, uni_avg, color='r', linestyle='-', label="Uniform")
+    ax.plot(uni_xpts, uni_avg, color='r', linestyle='-', marker='.', label="Uniform")
     ax.plot(rw_xpts, rw_avg, color='b', linestyle='-', marker='.', label="Random walk")
     ax.legend(loc='lower right')
     ax.set_ylabel("Pr(success)")
-    ax.set_xlabel("Time (s)")
+    ax.set_xlabel("Wall Time (s)")
     
     pt.tight_layout()
     pt.show()
