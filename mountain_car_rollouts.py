@@ -1,6 +1,8 @@
+import pickle as pk
 import time
 import numpy as np
 import matplotlib.pyplot as pt
+import matplotlib.patches as mp
 import gym
 
 def blind_search(env, num_steps, max_rollouts, walk_stdev = None):
@@ -32,19 +34,18 @@ def run(env, actions):
 
     success = None
     for r in range(num_rollouts):
-        states[r, 0], _ = env.reset()
+        states[r, 0] = env.reset()
         for t in range(num_steps):
-            states[r, t+1], rewards[r, t], terminated, _, _ = env.step(actions[r, t])
+            states[r, t+1], rewards[r, t], terminated, _ = env.step(actions[r, t])
             if terminated:
                 success = (r, t)
 
     return states, rewards, success
 
-
-def main():
+def do():
 
     num_rollouts = 8 * 4 # comparable computational expense to beam * branching
-    num_steps = 200
+    num_steps = 999
     walk_stdev = 0.1
 
     expert_actions = np.ones((1, num_steps, 1), dtype=np.float32)
@@ -67,10 +68,25 @@ def main():
     print(f"walk success at {walk_success}")
     print(f"total steps = {num_steps}*{num_rollouts} = {num_steps*num_rollouts}")
 
-    for r in range(num_rollouts):
-        pt.plot(uniform_states[r, :, 0].flatten(), uniform_states[r, :, 1].flatten(), 'b.-')
-        pt.plot(walk_states[r, :, 0].flatten(), walk_states[r, :, 1].flatten(), 'r.-')
-    pt.plot(expert_states[:, :, 0].flatten(), expert_states[:, :, 1].flatten(), 'g.-')
+    with open("mcr.pkl","wb") as f: pk.dump(uniform_states, f)
+
+def show():
+
+    with open("mcr.pkl","rb") as f: uniform_states = pk.load(f)
+    num_rollouts, num_steps = uniform_states.shape[:2]
+
+    spacer = np.linspace(0, 1, num_steps)[:,np.newaxis]
+    colors = spacer * np.array([1,0,0]) + (1 - spacer) * np.array([0,0,1])
+
+    # goal rectangle
+    pt.gca().add_patch(mp.Rectangle((.45, 0), .15, .07, linewidth=0, facecolor='gray'))
+    for t in range(num_steps):
+        pt.scatter(uniform_states[:,t,0], uniform_states[:,t,1], color=colors[t], marker='.')
+
+    # for r in range(num_rollouts):
+    #     pt.plot(uniform_states[r, :, 0].flatten(), uniform_states[r, :, 1].flatten(), 'b.-')
+    #     pt.plot(walk_states[r, :, 0].flatten(), walk_states[r, :, 1].flatten(), 'r.-')
+    # pt.plot(expert_states[:, :, 0].flatten(), expert_states[:, :, 1].flatten(), 'g.-')
 
     pt.xlim([-1.2, 0.6])
     pt.ylim([-0.07, 0.07])
@@ -81,5 +97,7 @@ def main():
     # env = gym.make("MountainCarContinuous-v0", render_mode="human")
     # state, _ = env.reset()
 
-if __name__ == "__main__": main()
+if __name__ == "__main__":
+    do()
+    show()
 

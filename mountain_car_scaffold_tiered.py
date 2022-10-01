@@ -1,6 +1,8 @@
+import pickle as pk
 import time
 import numpy as np
 import matplotlib.pyplot as pt
+import matplotlib.patches as mp
 from matplotlib.collections import LineCollection, PatchCollection
 import gym
 
@@ -9,6 +11,9 @@ def draw(states):
     num_steps = len(states)
     spacer = np.linspace(0, 1, num_steps)[:,np.newaxis]
     colors = spacer * np.array([1,0,0]) + (1 - spacer) * np.array([0,0,1])
+
+    # goal rectangle
+    pt.gca().add_patch(mp.Rectangle((.45, 0), .15, .07, linewidth=0, facecolor='gray'))
 
     for t in range(len(states)):
         pt.scatter(states[t][:,0], states[t][:,1], color=colors[t], marker='.')
@@ -21,14 +26,14 @@ def draw(states):
     pt.pause(0.01)
     pt.show()
 
-def main():
+def run():
 
-    num_steps = 200
+    num_steps = 999
     branching = 4
     beam = 8
     sampling = 8
 
-    do_walk = True
+    do_walk = False
     walk_stdev = 0.1
 
     rng = np.random.default_rng()
@@ -41,7 +46,7 @@ def main():
     actions = [np.nan * np.ones((1, 1))]
 
     pt.ion()
-
+    total_steps = 0
     for t in range(num_steps):
         print(f"step {t} of {num_steps}...")
 
@@ -57,6 +62,7 @@ def main():
             for b in range(branching):
                 env.state = states[t][p].copy()
                 child_states[p,b], _, _, _ = env.step(np.clip(child_actions[p,b], -1, 1))
+                total_steps += 1
         child_states = child_states.reshape(-1, 2)
         child_actions = child_actions.reshape(-1, 1)
 
@@ -99,17 +105,21 @@ def main():
 
     env.close()
 
-    print(f"total steps = {num_steps}*{beam}*{branching} = {num_steps*beam*branching}")
+    # print(f"total steps = {num_steps}*{beam}*{branching} = {num_steps*beam*branching}")
+    print(f"total steps = {num_steps}*{beam}*{branching} = {num_steps*beam*branching} =? {total_steps}")
 
-    import pickle as pk
     with open("mcst.pkl","wb") as f: pk.dump(states, f)
+
+def show():
+
+    with open("mcst.pkl","rb") as f: states = pk.load(f)
 
     pt.ioff()
     pt.cla()
     draw(states)
 
-    # env = gym.make("MountainCarContinuous-v0", render_mode="human")
-    # state, _ = env.reset()
 
-if __name__ == "__main__": main()
+if __name__ == "__main__":
+    run()
+    show()
 
