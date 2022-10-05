@@ -33,14 +33,14 @@ def draw(states):
 def run():
 
     num_steps = 999
-    branching = 4
-    beam = 8
-    sampling = 8
+    branching = 16
+    beam = 16
+    sampling = 16
     obs_size = 22 # apparently pb obs space larger than mujoco 17
     act_size = 6
 
     env = gym.make('Walker2DBulletEnv-v0')
-    # env.render(mode="human")
+    env.render(mode="human")
 
     init_state = env.reset()
     init_sid = pb.saveState()
@@ -64,8 +64,9 @@ def run():
         for p in range(P):
             for b in range(branching):
                 # reset state
-                env.state_id = sids[t][p]
-                env.reset()
+                pb.restoreState(sids[t][p])
+                # env.state_id = sids[t][p]
+                # env.reset()
                 # take step
                 child_states[p,b], _, _, _ = env.step(np.clip(child_actions[p,b], -1, 1))
                 child_sids[p,b] = pb.saveState()
