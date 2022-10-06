@@ -3,38 +3,32 @@ import numpy as np
 import pybullet_envs
 import gym
 
-env = gym.make('Walker2DBulletEnv-v0') 
+env = gym.make('Walker2DBulletEnv-v0')
+# env = gym.make('HumanoidBulletEnv-v0')
 env.render(mode="human")
 
+T = 1000
+
+A = np.random.uniform(-1, 1, size=(2*T, 6,)) # walker2d
+# A = np.random.uniform(-1, 1, size=(2*T, 17,)) # humanoid
+
 state = env.reset()
-print(env.stateId)
 
-# print(env.action_space)
-# print(dir(env))
-
-for t in range(1):
-    env.step(np.random.uniform(-1, 1, size=(6,)))
+print('start')
+for t in range(T):
+    env.step(A[t])
 
 sid = pb.saveState()
-print(sid)
 
-input('.')
+for r in range(100):
 
-for t in range(500):
-    env.step(np.random.uniform(-1, 1, size=(6,)))
+    pb.restoreState(sid)
 
-input('.')
+    for t in range(T, 2*T):
+        env.step(A[t])
 
-env.state_id = sid
-env.reset()
-
-for t in range(1):
-    env.step(np.random.uniform(-1, 1, size=(6,)))
-
-input('.')
-
-for t in range(500):
-    env.step(np.random.uniform(-1, 1, size=(6,)))
+    print(r)
+    # input('.')
 
 env.close()
 
