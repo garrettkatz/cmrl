@@ -19,7 +19,8 @@ state = env.reset()
 
 print('start')
 for t in range(T):
-    obsT = env.step(A[t])[0]
+    obsT, rewT, _, _ = env.step(A[t])
+rewardsT = list(env.rewards)
 
 sid = pb.saveState()
 
@@ -27,10 +28,10 @@ for r in range(100):
 
     pb.restoreState(sid)
 
-    print("T", obsT)
+    print("T", obsT, rewT, rewardsT)
     for t in range(T, 2*T):
-        obs2T = env.step(A[t])[0]
-    print("2T", obs2T)
+        obs2T, rew2T, _, _ = env.step(A[t])
+    print("2T", obs2T, rew2T, env.rewards)
 
     print(r)
     input('.')
