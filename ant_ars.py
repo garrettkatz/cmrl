@@ -11,7 +11,7 @@ import pickle as pk
 import time
 import numpy as np
 
-T = 500 # max timesteps
+T = 1000 # max timesteps
 
 def train():
 
@@ -24,7 +24,7 @@ def train():
     N = 60
     b = 20
     p, n = 8, 28 # action dim, observation dim
-    num_updates = 20 #100
+    num_updates = 1000
 
     M = np.zeros((p, n))
     μ = np.zeros(n)
@@ -69,9 +69,9 @@ def train():
         metrics['lifetime'].append(alive.mean())
         metrics['reward'].append(r.mean())
 
-        print(f"update {j}: reward ~ {metrics['reward'][-1]}, |μ| ~ {np.fabs(μ).mean()}, " + \
-              f"|Σ < ∞|={(Σ < np.inf).sum()}, |Σ| ~ {np.fabs(Σ[Σ < np.inf]).mean()}, " + \
-              f"T ~ {metrics['lifetime'][-1]} " + \
+        print(f"update {j}/{num_updates}: reward ~ {metrics['reward'][-1]:.2f}, |μ| ~ {np.fabs(μ).mean():.2f}, " + \
+              f"|Σ < ∞|={(Σ < np.inf).sum()}, |Σ| ~ {np.fabs(Σ[Σ < np.inf]).mean():.2f}, " + \
+              f"T ~ {metrics['lifetime'][-1]:.2f} " + \
               f"[{metrics['reward'][-1]:.2f}s]")
 
         with open("results", "wb") as f: pk.dump((metrics, M, μ, Σ), f)
