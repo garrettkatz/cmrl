@@ -19,8 +19,8 @@ def train():
 
     α = .015
     ν = .025
-    N = 4 # 60
-    b = 4 # 20
+    N = 60
+    b = 20
     p, n = 8, 28 # action dim, observation dim
     T = 500 # max timesteps
     num_updates = 100
@@ -28,38 +28,46 @@ def train():
 
     M = np.zeros((p, n))
     μ = np.zeros(n)
-    σ = np.ones(n)
+    Σ = np.ones(n)
+    nx = 0
+
+    runtimes = []
 
     env = gym.make('AntBulletEnv-v0')
 
     for j in range(num_updates):
+        update_start = time.perf_counter()
 
         δ = np.random.randn(N, p, n)
         δM = np.stack((M + ν*δ, M - ν*δ), axis=1)
         r = np.zeros((N, 2, T))
-        x = np.zeros((N, 2, T+1, n)) # what if some episodes done early?
 
         for (k, s) in it.product(range(N), range(2)):
-            print("",k,s)
+            # print("",k,s)
 
-            x[k,s,0] = env.reset()
+            x = env.reset()
             for t in range(T):
-                a = δM[k,s] @ ((x[k,s,t] - μ) / σ)
-                x[k,s,t+1], r[k,s,t], done, _ = env.step(a)
-                # if done: break
+
+                dx = x - μ
+                μ += dx / (nx + 1)
+                Σ = (Σ * nx + dx * (x - μ)) / (nx + 1)
+                nx += 1
+
+                a = δM[k,s] @ ((x - μ) / np.sqrt(np.where(Σ < 1e-8, np.inf, Σ)))
+                x, r[k,s,t], done, _ = env.step(a)
+                if done: break
 
         r = r.sum(axis=2)
-        dr = (r[k,0]-r[k,1]).reshape(-1, 1, 1)
-        k = np.argsort(r.max(axis=1))[-b:]
-        M = M + α / r[k].std() * np.mean(dr * δ[k], axis=0)
+        κ = np.argsort(r.max(axis=1))[-b:]
+        dr = (r[κ,0]-r[κ,1]).reshape(-1, 1, 1)
+        σR = r[κ].std()
+        M = M + α / σR * np.mean(dr * δ[κ], axis=0)
 
-        x = x.mean(axis=(0,1,2))
-        xmμ = x - μ
-        μ += xmμ / (j + 1)
-        σ = (σ**2 * j + xmμ * (x - μ)) / (j+1)
-        σ[σ < 1e-8] = np.inf
+        runtimes.append(time.perf_counter() - update_start)
 
-        print(f"update {j}: reward ~ {r.mean()}")
+        print(f"update {j}: reward ~ {r.mean()}, |μ| ~ {np.fabs(μ).mean()}, " + \
+              f"|Σ < ∞|={(Σ < np.inf).sum()}, |Σ| ~ {np.fabs(Σ[Σ < np.inf]).mean()} " + \
+              f"[{runtimes[-1]}s]")
 
     env.close()
 
