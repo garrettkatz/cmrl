@@ -10,28 +10,28 @@ import itertools as it
 import pickle as pk
 import time
 import numpy as np
-import matplotlib.pyplot as pt
-import gym
-import pybullet as pb
-import pybullet_envs
+
+T = 500 # max timesteps
 
 def train():
+
+    import gym
+    import pybullet as pb
+    import pybullet_envs
 
     α = .015
     ν = .025
     N = 60
     b = 20
     p, n = 8, 28 # action dim, observation dim
-    T = 500 # max timesteps
-    num_updates = 100
-    show_period = 10 # updates between visualization
+    num_updates = 20 #100
 
     M = np.zeros((p, n))
     μ = np.zeros(n)
     Σ = np.ones(n)
     nx = 0
 
-    runtimes = []
+    metrics = {key: [] for key in ('runtime','lifetime','reward')}
 
     env = gym.make('AntBulletEnv-v0')
 
@@ -41,12 +41,14 @@ def train():
         δ = np.random.randn(N, p, n)
         δM = np.stack((M + ν*δ, M - ν*δ), axis=1)
         r = np.zeros((N, 2, T))
+        alive = np.zeros((N, 2))
 
         for (k, s) in it.product(range(N), range(2)):
             # print("",k,s)
 
             x = env.reset()
             for t in range(T):
+                alive[k,s] = t
 
                 dx = x - μ
                 μ += dx / (nx + 1)
@@ -63,13 +65,59 @@ def train():
         σR = r[κ].std()
         M = M + α / σR * np.mean(dr * δ[κ], axis=0)
 
-        runtimes.append(time.perf_counter() - update_start)
+        metrics['runtime'].append(time.perf_counter() - update_start)
+        metrics['lifetime'].append(alive.mean())
+        metrics['reward'].append(r.mean())
 
-        print(f"update {j}: reward ~ {r.mean()}, |μ| ~ {np.fabs(μ).mean()}, " + \
-              f"|Σ < ∞|={(Σ < np.inf).sum()}, |Σ| ~ {np.fabs(Σ[Σ < np.inf]).mean()} " + \
-              f"[{runtimes[-1]}s]")
+        print(f"update {j}: reward ~ {metrics['reward'][-1]}, |μ| ~ {np.fabs(μ).mean()}, " + \
+              f"|Σ < ∞|={(Σ < np.inf).sum()}, |Σ| ~ {np.fabs(Σ[Σ < np.inf]).mean()}, " + \
+              f"T ~ {metrics['lifetime'][-1]} " + \
+              f"[{metrics['reward'][-1]:.2f}s]")
+
+        with open("results", "wb") as f: pk.dump((metrics, M, μ, Σ), f)
 
     env.close()
 
+def viz():
+
+    import gym
+    import pybullet as pb
+    import pybullet_envs
+
+    with open("results", "rb") as f: (metrics, M, μ, Σ) = pk.load(f)
+
+    env = gym.make('AntBulletEnv-v0')
+    env.render(mode="human")
+
+    r = np.zeros(T)
+    x = env.reset()
+    for t in range(T):
+        print(f"t={t}/{T}")
+        a = M @ ((x - μ) / np.sqrt(np.where(Σ < 1e-8, np.inf, Σ)))
+        x, r[t], done, _ = env.step(a)
+        if done: break
+        time.sleep(1/24)
+
+    r = r.sum()
+    env.close()
+
+    print(f"r = {r}")
+
+def show():
+
+    import matplotlib.pyplot as pt
+
+    with open("results", "rb") as f: (metrics, M, μ, Σ) = pk.load(f)
+
+    for k,key in enumerate(['runtime','lifetime','reward']):
+        pt.subplot(1,3,k+1)
+        pt.plot(metrics[key])
+        pt.ylabel(key)
+        pt.xlabel("Update")
+    pt.show()
+
 if __name__ == "__main__":
     train()
+    # viz()
+    # show()
+
