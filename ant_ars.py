@@ -109,15 +109,20 @@ def show():
 
     with open("results", "rb") as f: (metrics, M, μ, Σ) = pk.load(f)
 
-    for k,key in enumerate(['runtime','lifetime','reward']):
-        pt.subplot(1,3,k+1)
-        pt.plot(metrics[key])
-        pt.ylabel(key)
-        pt.xlabel("Update")
+    updates = np.arange(len(metrics['lifetime']))
+    walltime = np.cumsum(metrics['runtime']) / (60*60)
+
+    fig, ax = pt.subplots(2, 2, layout='constrained')
+    for c,key in enumerate(['lifetime','reward']):
+        for r,xticks in enumerate([updates, walltime]):
+            ax[r,c].plot(xticks, metrics[key])
+            ax[r,c].set_ylabel(key)
+            ax[r,c].set_xlabel(["Update","Wall time (hrs)"][r])
+    pt.tight_layout()
     pt.show()
 
 if __name__ == "__main__":
-    train()
+    # train()
     # viz()
-    # show()
+    show()
 
