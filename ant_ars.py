@@ -118,7 +118,6 @@ def show():
             ax[r,c].plot(xticks, metrics[key])
             ax[r,c].set_ylabel(key)
             ax[r,c].set_xlabel(["Update","Wall time (hrs)"][r])
-    pt.tight_layout()
     pt.show()
 
 if __name__ == "__main__":
