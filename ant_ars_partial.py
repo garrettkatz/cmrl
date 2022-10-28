@@ -1,10 +1,6 @@
 """
 Domain details:
 https://www.gymlibrary.dev/environments/mujoco/ant/
-ARS:
-https://proceedings.neurips.cc/paper/2018/file/7634ea65a4e6d9041cfd3f7de18e334a-Paper.pdf
-Online mean/variance:
-https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance#Welford's_online_algorithm
 """
 import itertools as it
 import pickle as pk
@@ -12,7 +8,20 @@ import time
 import numpy as np
 
 T = 1000 # max timesteps
-fname = "ant_ars_results.pkl"
+fname = "ant_ars_partial_results.pkl"
+
+class PartialAntEnv:
+    def __init__(self, env):
+        self.env = env
+    def reset(self):
+        obs = self.env.reset()
+        return np.concatenate((obs[5:13], obs[19:]))
+    def step(self, action):
+        obs, reward, done, info = self.env.step(action)
+        obs = np.concatenate((obs[5:13], obs[19:]))
+        return obs, reward, done, info
+    def close(self):
+        self.env.close()
 
 def train():
 
@@ -25,10 +34,10 @@ def train():
     ν = .025
     N = 60
     b = 20
-    p, n = 8, 28 # action dim, observation dim
+    p, n = 8, 17 # action dim, observation dim
     num_updates = 1000
 
-    env = gym.make('AntBulletEnv-v0')
+    env = PartialAntEnv(gym.make('AntBulletEnv-v0'))
     augmented_random_search(env, T, α, ν, N, b, p, n, num_updates, fname)
     env.close()
 
@@ -42,6 +51,7 @@ def viz():
 
     env = gym.make('AntBulletEnv-v0')
     env.render(mode="human")
+    env = PartialAntEnv(env)
 
     r = np.zeros(T)
     x = env.reset()
