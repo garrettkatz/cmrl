@@ -1,6 +1,6 @@
 """
 Domain details:
-https://www.gymlibrary.dev/environments/mujoco/ant/
+https://www.gymlibrary.dev/environments/mujoco/humanoid/
 """
 import itertools as it
 import pickle as pk
@@ -8,7 +8,7 @@ import time
 import numpy as np
 
 T = 1000 # max timesteps
-fname = "ant_ars_results.pkl"
+fname = "humanoid_ars_results.pkl"
 
 def train():
 
@@ -17,14 +17,14 @@ def train():
     import pybullet_envs
     from ars import augmented_random_search
 
-    α = .015
-    ν = .025
-    N = 60
-    b = 20
-    p, n = 8, 28 # action dim, observation dim
+    α = .02
+    ν = .0075
+    N = 230
+    b = 230
+    p, n = 17, 44 # action dim, observation dim
     num_updates = 1000
 
-    env = gym.make('AntBulletEnv-v0')
+    env = gym.make('HumanoidBulletEnv-v0')
     augmented_random_search(env, T, α, ν, N, b, p, n, num_updates, fname)
     env.close()
 
@@ -36,7 +36,7 @@ def viz():
 
     with open(fname, "rb") as f: (metrics, M, μ, Σ) = pk.load(f)
 
-    env = gym.make('AntBulletEnv-v0')
+    env = gym.make('HumanoidBulletEnv-v0')
     env.render(mode="human")
 
     r = np.zeros(T)

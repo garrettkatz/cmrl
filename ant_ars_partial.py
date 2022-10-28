@@ -85,7 +85,7 @@ def show():
     pt.show()
 
 if __name__ == "__main__":
-    train()
+    # train()
     # viz()
-    # show()
+    show()
 
