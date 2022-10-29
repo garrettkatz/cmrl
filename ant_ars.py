@@ -23,9 +23,10 @@ def train():
     b = 20
     p, n = 8, 28 # action dim, observation dim
     num_updates = 1000
+    resume = False
 
     env = gym.make('AntBulletEnv-v0')
-    augmented_random_search(env, T, α, ν, N, b, p, n, num_updates, fname)
+    augmented_random_search(env, T, α, ν, N, b, p, n, num_updates, fname, resume)
     env.close()
 
 def viz():
@@ -34,7 +35,7 @@ def viz():
     import pybullet as pb
     import pybullet_envs
 
-    with open(fname, "rb") as f: (metrics, M, μ, Σ) = pk.load(f)
+    with open(fname, "rb") as f: (metrics, M, μ, Σ, nx) = pk.load(f)
 
     env = gym.make('AntBulletEnv-v0')
     env.render(mode="human")
@@ -57,7 +58,7 @@ def show():
 
     import matplotlib.pyplot as pt
 
-    with open(fname, "rb") as f: (metrics, M, μ, Σ) = pk.load(f)
+    with open(fname, "rb") as f: (metrics, M, μ, Σ, nx) = pk.load(f)
 
     updates = np.arange(len(metrics['lifetime']))
     walltime = np.cumsum(metrics['runtime']) / (60*60)

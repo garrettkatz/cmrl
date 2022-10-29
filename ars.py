@@ -26,16 +26,26 @@ Outputs:
     μ: (n,) array of element-wise observation mean
     Σ: (n,) array of element-wise observation variance
 """
-def augmented_random_search(env, num_timesteps, α, ν, N, b, p, n, num_updates, result_filename):
+def augmented_random_search(env, num_timesteps, α, ν, N, b, p, n, num_updates, result_filename, resume=False):
 
-    # Initialize linear policy matrix and observation statistics
-    M = np.zeros((p, n))
-    μ = np.zeros(n)
-    Σ = np.ones(n)
-    nx = 0 # number of samples for online mean/variance calculation
+    if resume:
 
-    # Initialize learning metrics
-    metrics = {key: [] for key in ('runtime','lifetime','reward')}
+        # Load progress
+        with open(result_filename, "rb") as f: (metrics, M, μ, Σ, nx) = pk.load(f)
+
+    else:
+
+        # Initialize linear policy matrix and observation statistics
+        M = np.zeros((p, n))
+        μ = np.zeros(n)
+        Σ = np.ones(n)
+        nx = 0 # number of samples for online mean/variance calculation
+
+        # Initialize learning metrics
+        metrics = {key: [] for key in ('runtime','lifetime','reward')}
+
+    # Updates so far
+    J = len(metrics['runtime'])
 
     # Iterate policy updates
     for j in range(num_updates):
@@ -81,14 +91,15 @@ def augmented_random_search(env, num_timesteps, α, ν, N, b, p, n, num_updates,
         metrics['reward'].append(r.mean())
 
         # Print progress update
-        print(f"update {j}/{num_updates}: reward ~ {metrics['reward'][-1]:.2f}, |μ| ~ {np.fabs(μ).mean():.2f}, " + \
+        print(f"update {J+j}/{J+num_updates}: reward ~ {metrics['reward'][-1]:.2f}, " + \
+              f"|μ| ~ {np.fabs(μ).mean():.2f} (nx={nx}), " + \
               f"|Σ < ∞|={(Σ < np.inf).sum()}, |Σ| ~ {np.fabs(Σ[Σ < np.inf]).mean():.2f}, " + \
               f"T ~ {metrics['lifetime'][-1]:.2f} " + \
               f"[{metrics['reward'][-1]:.2f}s]")
 
         # Save progress
-        with open(result_filename, "wb") as f: pk.dump((metrics, M, μ, Σ), f)
+        with open(result_filename, "wb") as f: pk.dump((metrics, M, μ, Σ, nx), f)
 
     # Return final metrics and policy
-    return (metrics, M, μ, Σ)
+    return (metrics, M, μ, Σ, nx)
 

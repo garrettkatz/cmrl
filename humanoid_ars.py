@@ -22,10 +22,11 @@ def train():
     N = 230
     b = 230
     p, n = 17, 44 # action dim, observation dim
-    num_updates = 1000
+    num_updates = 5000
+    resume = False
 
     env = gym.make('HumanoidBulletEnv-v0')
-    augmented_random_search(env, T, α, ν, N, b, p, n, num_updates, fname)
+    augmented_random_search(env, T, α, ν, N, b, p, n, num_updates, fname, resume)
     env.close()
 
 def viz():
@@ -34,7 +35,7 @@ def viz():
     import pybullet as pb
     import pybullet_envs
 
-    with open(fname, "rb") as f: (metrics, M, μ, Σ) = pk.load(f)
+    with open(fname, "rb") as f: (metrics, M, μ, Σ, nx) = pk.load(f)
 
     env = gym.make('HumanoidBulletEnv-v0')
     env.render(mode="human")
@@ -57,7 +58,7 @@ def show():
 
     import matplotlib.pyplot as pt
 
-    with open(fname, "rb") as f: (metrics, M, μ, Σ) = pk.load(f)
+    with open(fname, "rb") as f: (metrics, M, μ, Σ, nx) = pk.load(f)
 
     updates = np.arange(len(metrics['lifetime']))
     walltime = np.cumsum(metrics['runtime']) / (60*60)
