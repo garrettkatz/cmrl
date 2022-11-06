@@ -23,7 +23,8 @@ def train():
         nu = .025,
         num_steps = T,
         num_updates = 1000,
-        num_workers = 1,
+        # num_workers = 1, # laptop
+        num_workers = 10, # lab workstation
         save_root_path = root_path,
         resume_filename = None,
     )
