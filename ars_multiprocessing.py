@@ -48,7 +48,7 @@ def run_rollouts(tuple_args):
     mean = x.mean(axis=0)
     sx = x.sum(axis=0) # sum of samples
     ssd = ((x - mean)**2).sum(axis=0) # sum of squared differences from mean
-    r = r.sum(axis=1)
+    r = r.sum(axis=2)
 
     return nx, sx, ssd, r, alive
 
