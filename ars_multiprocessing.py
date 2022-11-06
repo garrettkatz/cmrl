@@ -2,7 +2,7 @@
 Augmented Random Search:
     https://proceedings.neurips.cc/paper/2018/file/7634ea65a4e6d9041cfd3f7de18e334a-Paper.pdf
 Online mean/variance calculation:
-    https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance#Welford's_online_algorithm
+    https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance#Parallel_algorithm
 """
 import itertools as it
 import pickle as pk
@@ -15,18 +15,18 @@ import multiprocessing
 from gym.wrappers.monitoring.video_recorder import VideoRecorder
 from tensorboardX import SummaryWriter
 
+import pybullet as pb
+import pybullet_envs
 
-def augmented_random_search(tuple_args):
-    env, M, delta, mean, var, gamma = tuple_args
-    T = env._max_episode_steps if hasattr(env, '_max_episode_steps') else 1000
-    delta_M = np.stack((M + gamma*delta, M - gamma*delta), axis=1)
+def run_rollouts(tuple_args):
+    env, T, M, delta, mean, var, nu = tuple_args
+    delta_M = np.stack((M + nu*delta, M - nu*delta), axis=1)
     N = delta.shape[0]
 
     # Allocate arrays for reward and episode length
     r = np.zeros((N, 2, T))
     alive = np.zeros((N, 2))
-    all_rollout_x = []
-
+    all_x = []
 
     for (k, s) in it.product(range(N), range(2)):
         # Reset environment for current rollout
@@ -38,31 +38,39 @@ def augmented_random_search(tuple_args):
             # Apply linear policy to standardized observation and perform action
             a = delta_M[k,s] @ ((x - mean) / np.sqrt(var + 1e-8))
             x, r[k,s,t], done, _ = env.step(a)
-            all_rollout_x.append(x)
+            all_x.append(x)
 
             if done:
                 break
 
-    return all_rollout_x, r, alive
+    x = np.stack(all_x)
+    nx = x.shape[0] # number of samples
+    mean = x.mean(axis=0)
+    sx = x.sum(axis=0) # sum of samples
+    ssd = ((x - mean)**2).sum(axis=0) # sum of squared differences from mean
+    r = r.sum(axis=1)
 
+    return nx, sx, ssd, r, alive
 
-
-def multiprocessing_augmented_random_search(
+def augmented_random_search(
     env_name,
-    N = 64,
-    b = 20,
-    alpha = 0.015,
-    gamma = 0.025,
-    num_updates = 500,
-    resume_filename = None,
-    save_root_path = './ars/',
-    num_workers = 8,
+    N, # batch size
+    b, # top-b of batch used for update
+    alpha, # step size
+    nu, # noise size
+    num_steps, # max steps per rollout
+    num_updates, # number of parameter updates
+    num_workers, # number of parallel workers for rollouts, should divide N
+    save_root_path, # directory to save logging data
+    resume_filename = None, # checkpoint filename (None starts from scratch)
 ):
+
+    # Initialize one copy of environment per worker
     envs = [gym.make(env_name) for _ in range(num_workers)]
     p = envs[0].action_space.shape[0]
     n = envs[0].observation_space.shape[0]
 
-    if resume_filename:
+    if resume_filename is not None:
         # Load progress
         with open(resume_filename, "rb") as f: 
             (metrics, M, mean, var, nx) = pk.load(f)
@@ -85,44 +93,49 @@ def multiprocessing_augmented_random_search(
     log = SummaryWriter(os.path.join(save_root_path + 'log/'))
 
     with multiprocessing.Pool(num_workers) as pool:
-        for e in np.arange(num_updates) + 1:
+        for e in range(1, num_updates + 1):
             update_start = time.perf_counter() # time the update
-            last_nx = nx
 
             # Sample random perturbations to linear policy
-            delta = np.random.randn(N, p, n).reshape(num_workers, -1, p, n)
+            delta = np.random.randn(N, p, n)
+            
+            # chunk perturbations for parallel workers
+            delta = delta.reshape(num_workers, -1, p, n)
 
-            worker_args = [(envs[i], M, delta[i], mean, var, gamma) for i in range(num_workers)]
-            results = pool.map(augmented_random_search, worker_args)
-            all_rollout_xs, rs, alives = zip(*results)
+            # Collect rollout data for policy and state statistics updates
+            worker_args = [(envs[i], num_steps, M, delta[i], mean, var, nu) for i in range(num_workers)]
+            results = pool.map(run_rollouts, worker_args)
+            nxs, sxs, ssds, rs, alives = zip(*results)
 
-            all_rollout_xs = np.concatenate(all_rollout_xs, 0) # [N*2*T, n]
-            rs = np.concatenate(rs, 0) # [N, 2, T]
-            alives = np.concatenate(alives, 0) # [N, 2]
+            # Unchunk perturbations for parameter update
             delta = delta.reshape(N, p, n)
 
-            # Policy update rule
-            rs = rs.sum(axis=2)
+            # Update policy parameters
+            rs = np.concatenate(rs, 0) # [N, 2]
+            alives = np.concatenate(alives, 0) # [N, 2]
+
             kappa = np.argsort(rs.max(axis=1))[-b:]
             drs = (rs[kappa,0]-rs[kappa,1]).reshape(-1, 1, 1)
             sigma_R = rs[kappa].std()
             M = M + alpha / sigma_R * np.mean(drs * delta[kappa], axis=0)
-            curr_nx = all_rollout_xs.shape[0]
-            nx += curr_nx
 
-            # https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance: Parallel variance
-            avg_curr_rollout_x = np.mean(all_rollout_xs, 0)
-            M_prev = var * last_nx
-            M_curr = np.std(all_rollout_xs, 0)**2 * curr_nx
-            M2 = M_prev + M_curr + (avg_curr_rollout_x - mean) ** 2 * last_nx * curr_nx / nx
-            var = M2 / nx
-            mean = (mean * last_nx + avg_curr_rollout_x * curr_nx) / nx
+            # Update state statistics
+            # https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance#Parallel_algorithm
+            nx_old, mean_old, ssd_old = nx, mean, var * nx
+            nx_new = sum(nxs)
+            mean_new = sum(sxs) / nx_new
+            ssd_new = sum(ssds)
 
-            # Update learning metrics
+            nx = nx_old + nx_new
+            dmean = mean_new - mean_old
+            mean = mean_old + dmean * nx_new / nx
+            ssd = ssd_old + ssd_new + dmean**2 * nx_old * nx_new / nx
+            var = ssd / nx
+
+            # Update and log learning metrics
             metrics['runtime'].append(time.perf_counter() - update_start)
             metrics['lifetime'].append(alives.mean())
             metrics['reward'].append(rs.mean())
-
             log.add_scalar('Lifetime', alives.mean(), e)
             log.add_scalar('Reward', rs.mean(), e)
 
@@ -134,7 +147,7 @@ def multiprocessing_augmented_random_search(
                 f"Running time ~ {metrics['runtime'][-1]:.2f}s")
 
             # Save progress
-            with open(os.path.join(save_root_path, 'ars.pkl'), "wb") as f: 
+            with open(os.path.join(save_root_path, 'progress.pkl'), "wb") as f: 
                 pk.dump((metrics, M, mean, var, nx), f)
 
     log.close()
@@ -143,8 +156,8 @@ def multiprocessing_augmented_random_search(
     return (metrics, M, mean, var, nx)
 
 
-def viz(env_name, fname = 'ars.pkl'):
-    with open(fname, 'rb') as f:
+def visualize(env_name, max_steps, root_path):
+    with open(os.path.join(root_path, 'progress.pkl'), 'rb') as f:
         (metrics, M, mean, var, nx) = pk.load(f)
 
     env = gym.make(env_name)
@@ -152,7 +165,7 @@ def viz(env_name, fname = 'ars.pkl'):
     tr = 0
     steps = 0
     done = False
-    recoder = VideoRecorder(env, 'ars.mp4', enabled = True)
+    recoder = VideoRecorder(env, os.path.join(root_path, 'viz.mp4'), enabled = True)
 
     while not done:
         a = M @ ((x - mean) / np.sqrt(var + 1e-8))
@@ -162,23 +175,28 @@ def viz(env_name, fname = 'ars.pkl'):
         steps += 1
         tr += r
 
+        if steps == max_steps: break
+
     recoder.close()
     recoder.enabled = False
     env.close()
-    print('Steps = %.2f | Reward = %.2f' % (steps, tr))
+    print('Steps = %d | Reward = %.2f' % (steps, tr))
 
 
 if __name__ == '__main__':
+
     params = dict(
-        env_name = 'Humanoid-v4',
+        # env_name = 'Humanoid-v4',
+        # env_name = 'HumanoidBulletEnv-v0',
+        env_name = 'AntBulletEnv-v0',
         N = 64,
         b = 20,
         alpha = 0.015,
-        gamma = 0.025,
+        nu = 0.025,
         num_updates = 10000,
-        resume_filename = './pre.pkl',
-        save_root_path = './ars/',
-        num_workers = 16
+        # resume_filename = './pre.pkl',
+        save_root_path = './ars_results/ant/',
+        num_workers = 2
     )
 
     print(params)
@@ -186,6 +204,6 @@ if __name__ == '__main__':
     with open('config.yaml', 'w') as f:
         yaml.dump(params, f)
 
-    multiprocessing_augmented_random_search(**params)
+    augmented_random_search(**params)
 
     viz(env_name = params['env_name'], fname = os.path.join(params['save_root_path'], 'ars.pkl'))
