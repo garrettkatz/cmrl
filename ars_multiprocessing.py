@@ -156,11 +156,13 @@ def augmented_random_search(
     return (metrics, M, mean, var, nx)
 
 
-def visualize(env_name, max_steps, root_path):
+def visualize(env_name, max_steps, root_path, show=True):
     with open(os.path.join(root_path, 'progress.pkl'), 'rb') as f:
         (metrics, M, mean, var, nx) = pk.load(f)
 
     env = gym.make(env_name)
+    if show: env.render(mode="human")
+
     x = env.reset()
     tr = 0
     steps = 0

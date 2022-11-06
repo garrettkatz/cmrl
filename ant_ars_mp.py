@@ -37,12 +37,10 @@ def viz():
 def show():
 
     from ars_plot import plot_metrics
-    plot_metrics(root_name)
+    plot_metrics(root_path)
 
 if __name__ == "__main__":
     train()
     # viz()
     # show()
-
-
 

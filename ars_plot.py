@@ -1,6 +1,7 @@
 import os
 import numpy as np
 import matplotlib.pyplot as pt
+import pickle as pk
 
 def plot_metrics(root_path):
     with open(os.path.join(root_path, 'progress.pkl'), 'rb') as f:
