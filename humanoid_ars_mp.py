@@ -8,8 +8,8 @@ import time
 import numpy as np
 import os
 
-env_name = 'AntBulletEnv-v0'
-root_path = 'ant_ars_results'
+env_name = 'HumanoidBulletEnv-v0'
+root_path = 'humanoid_ars_results'
 T = 1000 # max timesteps
 
 def train():
@@ -17,14 +17,13 @@ def train():
     from ars_multiprocessing import augmented_random_search
     augmented_random_search(
         env_name,
-        N = 60,
-        b = 20,
-        alpha = .015,
-        nu = .025,
+        N = 230,
+        b = 230,
+        alpha = .02,
+        nu = .0075,
         num_steps = T,
-        num_updates = 1000,
-        # num_workers = 1, # laptop
-        num_workers = 10, # lab workstation
+        num_updates = 3000,
+        num_workers = 10,
         save_root_path = root_path,
         resume_filename = None,
     )
@@ -40,7 +39,9 @@ def show():
     plot_metrics(root_path)
 
 if __name__ == "__main__":
-    # train()
+    train()
     # viz()
-    show()
+    # show()
+
+
 
