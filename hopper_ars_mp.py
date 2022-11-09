@@ -31,8 +31,8 @@ def train():
 
 def viz():
 
-    from ars_multiprocessing import visualize
-    visualize(env_name, T, root_path)
+    from ars_multiprocessing import gym_env_maker, augmented_random_search
+    visualize(gym_env_maker(env_name), T, root_path)
 
 def show():
 

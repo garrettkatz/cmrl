@@ -12,11 +12,13 @@ env_name = 'HumanoidBulletEnv-v0'
 root_path = 'humanoid_ars_results'
 T = 1000 # max timesteps
 
+make_env = gym_env_maker(env_name)
+
 def train():
 
     from ars_multiprocessing import gym_env_maker, augmented_random_search
     augmented_random_search(
-        gym_env_maker(env_name),
+        make_env,
         N = 230,
         b = 230,
         alpha = .02,
@@ -31,7 +33,7 @@ def train():
 def viz():
 
     from ars_multiprocessing import visualize
-    visualize(env_name, T, root_path)
+    visualize(make_env, T, root_path)
 
 def show():
 

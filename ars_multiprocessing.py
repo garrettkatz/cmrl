@@ -11,6 +11,7 @@ import yaml
 import os
 import numpy as np
 import gym
+from dm_control import suite
 import multiprocessing
 from gym.wrappers.monitoring.video_recorder import VideoRecorder
 from tensorboardX import SummaryWriter
@@ -160,16 +161,17 @@ def gym_env_maker(env_name):
         return gym.make(env_name)
     return make_env
 
-# def gym_env_maker(env_name):
-#     def make_env():
-#         return gym.make(env_name)
-#     return make_env
+def dmc_env_maker(domain_name, task_name):
+    def make_env():
+        need a gym-conformant wrapper here
+        return suite.load(domain_name, task_name)
+    return make_env
 
-def visualize(env_name, max_steps, root_path, show=True):
+def visualize(make_env, max_steps, root_path, show=True):
     with open(os.path.join(root_path, 'progress.pkl'), 'rb') as f:
         (metrics, M, mean, var, nx) = pk.load(f)
 
-    env = gym.make(env_name)
+    env = make_env()
     if show: env.render(mode="human")
 
     x = env.reset()
