@@ -15,7 +15,7 @@ from gym.spaces import Space
 from dm_control import suite
 import multiprocessing
 from gym.wrappers.monitoring.video_recorder import VideoRecorder
-from tensorboardX import SummaryWriter
+# from tensorboardX import SummaryWriter
 
 def run_rollouts(tuple_args):
     env, T, M, delta, mean, var, nu = tuple_args
@@ -89,7 +89,7 @@ def augmented_random_search(
     if not os.path.exists(save_root_path):
         os.mkdir(save_root_path)
 
-    log = SummaryWriter(os.path.join(save_root_path + 'log/'))
+    # log = SummaryWriter(os.path.join(save_root_path + 'log/'))
 
     with multiprocessing.Pool(num_workers) as pool:
         for e in range(1, num_updates + 1):
@@ -135,8 +135,8 @@ def augmented_random_search(
             metrics['runtime'].append(time.perf_counter() - update_start)
             metrics['lifetime'].append(alives.mean())
             metrics['reward'].append(rs.mean())
-            log.add_scalar('Lifetime', alives.mean(), e)
-            log.add_scalar('Reward', rs.mean(), e)
+            # log.add_scalar('Lifetime', alives.mean(), e)
+            # log.add_scalar('Reward', rs.mean(), e)
 
             # Print progress update
             print(f"update {E+e}/{E+num_updates}: reward ~ {metrics['reward'][-1]:.2f}, " + \
@@ -149,7 +149,7 @@ def augmented_random_search(
             with open(os.path.join(save_root_path, 'progress.pkl'), "wb") as f: 
                 pk.dump((metrics, M, mean, var, nx), f)
 
-    log.close()
+    # log.close()
 
     # Return final metrics and policy
     return (metrics, M, mean, var, nx)

@@ -14,6 +14,7 @@ T = 1000 # max timesteps
 
 def train():
 
+    import pybullet_envs
     from ars_multiprocessing import gym_env_maker, augmented_random_search
     augmented_random_search(
         gym_env_maker(env_name),
@@ -31,6 +32,7 @@ def train():
 
 def viz():
 
+    import pybullet_envs
     from ars_multiprocessing import gym_env_maker, augmented_random_search
     visualize(gym_env_maker(env_name), T, root_path)
 
