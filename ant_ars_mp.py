@@ -14,9 +14,9 @@ T = 1000 # max timesteps
 
 def train():
 
-    from ars_multiprocessing import augmented_random_search
+    from ars_multiprocessing import gym_env_maker, augmented_random_search
     augmented_random_search(
-        env_name,
+        gym_env_maker(env_name),
         N = 60,
         b = 20,
         alpha = .015,

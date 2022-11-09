@@ -1,6 +1,6 @@
 """
 Domain details:
-https://www.gymlibrary.dev/environments/mujoco/ant/
+https://www.gymlibrary.dev/environments/mujoco/hopper/
 """
 import itertools as it
 import pickle as pk
@@ -8,8 +8,8 @@ import time
 import numpy as np
 import os
 
-env_name = 'HumanoidBulletEnv-v0'
-root_path = 'humanoid_ars_results'
+env_name = 'HopperBulletEnv-v0'
+root_path = 'hopper_ars_results'
 T = 1000 # max timesteps
 
 def train():
@@ -17,13 +17,14 @@ def train():
     from ars_multiprocessing import gym_env_maker, augmented_random_search
     augmented_random_search(
         gym_env_maker(env_name),
-        N = 230,
-        b = 230,
-        alpha = .02,
-        nu = .0075,
+        N = 60,
+        b = 20,
+        alpha = .015,
+        nu = .025,
         num_steps = T,
-        num_updates = 3000,
-        num_workers = 10,
+        num_updates = 1000,
+        # num_workers = 1, # laptop
+        num_workers = 10, # lab workstation
         save_root_path = root_path,
         resume_filename = None,
     )
@@ -42,6 +43,4 @@ if __name__ == "__main__":
     train()
     # viz()
     # show()
-
-
 

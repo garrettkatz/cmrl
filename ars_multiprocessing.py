@@ -53,7 +53,7 @@ def run_rollouts(tuple_args):
     return nx, sx, ssd, r, alive
 
 def augmented_random_search(
-    env_name,
+    make_env, # make_env() should return a gym-conformant environment instance
     N, # batch size
     b, # top-b of batch used for update
     alpha, # step size
@@ -66,7 +66,7 @@ def augmented_random_search(
 ):
 
     # Initialize one copy of environment per worker
-    envs = [gym.make(env_name) for _ in range(num_workers)]
+    envs = [make_env() for _ in range(num_workers)]
     p = envs[0].action_space.shape[0]
     n = envs[0].observation_space.shape[0]
 
@@ -155,6 +155,15 @@ def augmented_random_search(
     # Return final metrics and policy
     return (metrics, M, mean, var, nx)
 
+def gym_env_maker(env_name):
+    def make_env():
+        return gym.make(env_name)
+    return make_env
+
+# def gym_env_maker(env_name):
+#     def make_env():
+#         return gym.make(env_name)
+#     return make_env
 
 def visualize(env_name, max_steps, root_path, show=True):
     with open(os.path.join(root_path, 'progress.pkl'), 'rb') as f:
@@ -184,20 +193,20 @@ def visualize(env_name, max_steps, root_path, show=True):
     env.close()
     print('Steps = %d | Reward = %.2f' % (steps, tr))
 
-
 if __name__ == '__main__':
 
     params = dict(
         # env_name = 'Humanoid-v4',
         # env_name = 'HumanoidBulletEnv-v0',
-        env_name = 'AntBulletEnv-v0',
+        # env_name = 'AntBulletEnv-v0',
+        env_name = 'HopperEnv-v0',
         N = 64,
         b = 20,
         alpha = 0.015,
         nu = 0.025,
         num_updates = 10000,
         # resume_filename = './pre.pkl',
-        save_root_path = './ars_results/ant/',
+        save_root_path = './ars_results/hopper/',
         num_workers = 2
     )
 
@@ -206,6 +215,7 @@ if __name__ == '__main__':
     with open('config.yaml', 'w') as f:
         yaml.dump(params, f)
 
+    params["make_env"] = gym_env_maker(params.pop("env_name"))
     augmented_random_search(**params)
 
     viz(env_name = params['env_name'], fname = os.path.join(params['save_root_path'], 'ars.pkl'))
