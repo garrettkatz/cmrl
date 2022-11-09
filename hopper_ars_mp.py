@@ -23,7 +23,7 @@ def train():
         alpha = .01,
         nu = .025,
         num_steps = T,
-        num_updates = 1000,
+        num_updates = 5000,
         # num_workers = 1, # laptop
         num_workers = 8, # lab workstation
         save_root_path = root_path,
@@ -33,7 +33,7 @@ def train():
 def viz():
 
     import pybullet_envs
-    from ars_multiprocessing import gym_env_maker, augmented_random_search
+    from ars_multiprocessing import gym_env_maker, visualize
     visualize(gym_env_maker(env_name), T, root_path)
 
 def show():
