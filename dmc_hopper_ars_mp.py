@@ -18,14 +18,14 @@ def train():
     from ars_multiprocessing import dmc_env_maker, augmented_random_search
     augmented_random_search(
         dmc_env_maker(domain_name, task_name),
-        N = 60,
-        b = 20,
-        alpha = .015,
+        N = 8,
+        b = 4,
+        alpha = .01,
         nu = .025,
         num_steps = T,
         num_updates = 1000,
-        num_workers = 1, # laptop
-        # num_workers = 10, # lab workstation
+        # num_workers = 1, # laptop
+        num_workers = 8, # lab workstation
         save_root_path = root_path,
         resume_filename = None,
     )

@@ -11,13 +11,11 @@ import yaml
 import os
 import numpy as np
 import gym
+from gym.spaces import Space
 from dm_control import suite
 import multiprocessing
 from gym.wrappers.monitoring.video_recorder import VideoRecorder
 from tensorboardX import SummaryWriter
-
-import pybullet as pb
-import pybullet_envs
 
 def run_rollouts(tuple_args):
     env, T, M, delta, mean, var, nu = tuple_args
@@ -161,10 +159,24 @@ def gym_env_maker(env_name):
         return gym.make(env_name)
     return make_env
 
+# gym conformant wrapper
+class DMCEnv:
+    def __init__(self, env):
+        self.env = env
+        self.action_space = Space(shape=env.action_spec().shape)
+        self.observation_space = Space(shape=(sum(v.shape[0] for v in env.observation_spec().values()),))
+    def obs_array(self, ts):
+        return np.concatenate(tuple(ts.observation.values()))
+    def reset(self):
+        ts = self.env.reset()
+        return self.obs_array(ts)
+    def step(self, action):
+        ts = self.env.step(action)
+        return (self.obs_array(ts), ts.reward, ts.last(), None) 
+
 def dmc_env_maker(domain_name, task_name):
     def make_env():
-        need a gym-conformant wrapper here
-        return suite.load(domain_name, task_name)
+        return DMCEnv(suite.load(domain_name, task_name))
     return make_env
 
 def visualize(make_env, max_steps, root_path, show=True):
