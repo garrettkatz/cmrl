@@ -12,13 +12,12 @@ env_name = 'AntBulletEnv-v0'
 root_path = 'ant_ars_results'
 T = 1000 # max timesteps
 
-make_env = gym_env_maker(env_name)
-
 def train():
 
+    import pybullet_envs
     from ars_multiprocessing import gym_env_maker, augmented_random_search
     augmented_random_search(
-        make_env,
+        gym_env_maker(env_name),
         N = 60,
         b = 20,
         alpha = .015,
@@ -33,8 +32,9 @@ def train():
 
 def viz():
 
-    from ars_multiprocessing import visualize
-    visualize(make_env, T, root_path)
+    import pybullet_envs
+    from ars_multiprocessing import gym_env_maker, visualize
+    visualize(gym_env_maker(env_name), T, root_path)
 
 def show():
 
@@ -42,7 +42,7 @@ def show():
     plot_metrics(root_path)
 
 if __name__ == "__main__":
-    # train()
+    train()
     # viz()
-    show()
+    # show()
 
