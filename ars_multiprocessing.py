@@ -149,6 +149,8 @@ def augmented_random_search(
             with open(os.path.join(save_root_path, 'progress.pkl'), "wb") as f: 
                 pk.dump((metrics, M, mean, var, nx), f)
 
+    # cleanup
+    for env in envs: env.close()
     # log.close()
 
     # Return final metrics and policy
@@ -160,7 +162,7 @@ def gym_env_maker(env_name):
     return make_env
 
 # gym conformant wrapper
-class DMCEnv:
+class DMCWrapper:
     def __init__(self, env):
         self.env = env
         self.action_space = Space(shape=env.action_spec().shape)
@@ -172,14 +174,14 @@ class DMCEnv:
         return self.obs_array(ts)
     def step(self, action):
         ts = self.env.step(action)
-        return (self.obs_array(ts), ts.reward, ts.last(), None) 
+        return (self.obs_array(ts), ts.reward, ts.last(), None)
 
 def dmc_env_maker(domain_name, task_name):
     def make_env():
-        return DMCEnv(suite.load(domain_name, task_name))
+        return DMCWrapper(suite.load(domain_name, task_name))
     return make_env
 
-def visualize(make_env, max_steps, root_path, show=True):
+def visualize(make_env, max_steps, root_path, show=True, record=True):
     with open(os.path.join(root_path, 'progress.pkl'), 'rb') as f:
         (metrics, M, mean, var, nx) = pk.load(f)
 
@@ -190,20 +192,21 @@ def visualize(make_env, max_steps, root_path, show=True):
     tr = 0
     steps = 0
     done = False
-    recoder = VideoRecorder(env, os.path.join(root_path, 'viz.mp4'), enabled = True)
+    if record: recoder = VideoRecorder(env, os.path.join(root_path, 'viz.mp4'), enabled = True)
 
     while not done:
         a = M @ ((x - mean) / np.sqrt(var + 1e-8))
         x, r, done, _ = env.step(a)
-        recoder.capture_frame()
+        if record: recoder.capture_frame()
 
         steps += 1
         tr += r
 
         if steps == max_steps: break
 
-    recoder.close()
-    recoder.enabled = False
+    if record:
+        recoder.close()
+        recoder.enabled = False
     env.close()
     print('Steps = %d | Reward = %.2f' % (steps, tr))
 
