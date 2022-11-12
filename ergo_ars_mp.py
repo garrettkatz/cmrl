@@ -12,20 +12,21 @@ T = 24*6 # 6 seconds, control rate 24 frames per second
 
 def train():
 
-    from ergo_wrapper import env_maker
+    from ergo_wrapper import env_maker, initial_policy
     from ars_multiprocessing import augmented_random_search
     augmented_random_search(
         env_maker(timestep, control_period),
-        N = 10,
-        b = 10,
+        N = 100,
+        b = 100,
         alpha = .01,
-        nu = .025,
+        nu = .001,
         num_steps = T,
-        num_updates = 10,
-        num_workers = 2, # laptop
-        # num_workers = 8, # lab workstation
+        num_updates = 1000,
+        # num_workers = 2, # laptop
+        num_workers = 8, # lab workstation
         save_root_path = root_path,
         resume_filename = None,
+        M = initial_policy(),
     )
 
 def viz():

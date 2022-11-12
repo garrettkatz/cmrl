@@ -38,16 +38,31 @@ class Wrapper:
             use_fixed_base=False,
             use_self_collision=False,
         )
+
+        # initial position and orientation for assessing reward
+        self.start_pos, self.start_orn, _, _ = self.env.get_base()
+
         return self.obs()
 
     def reward(self):
-        pos, orn, vel, ang = self.env.get_base()
-        return -pos[1] # reward for distance along -y direction
+        pos, orn, _, _ = self.env.get_base()
+
+        # Euclidean distances
+        dy = self.start_pos[1] - pos[1] # distance along -y direction
+        dxz = np.sqrt((pos[0]-self.start_pos[0])**2 + (pos[2]-self.start_pos[2])**2) # distance in xz plane
+
+        # Angular change
+        quat = pb.getDifferenceQuaternion(orn, self.start_orn)
+        _, angle = pb.getAxisAngleFromQuaternion(quat)
+        da = abs(angle)
+
+        # reward y distance, penalize other changes to orientation/position
+        return dy - dxz - da
 
     def step(self, action):
         self.env.step(action)
         pos, orn, vel, ang = self.env.get_base()
-        done = (pos[2] < .3) # rough threshold for falling
+        done = abs(pos[2] - .43) > .1 # rough threshold for target waist height
         return self.obs(), self.reward(), done, None
 
 def env_maker(timestep, control_period):
@@ -85,9 +100,9 @@ def initial_waypoints():
         'r_ankle_y': -20, 'r_knee_y': 40, 'r_hip_y': -20})
     settle = env.angle_array(settle_dict)
 
-    waypoints = [stand, lift, push, settle]
-    for w in range(len(waypoints)):
-        waypoints.append(env.mirror_position(waypoints[w]))
+    waypoints = [stand, lift, step, push, step, settle]
+    for w in range(4,6):
+        waypoints[w] = env.mirror_position(waypoints[w])
 
     env.close()
 
@@ -98,28 +113,28 @@ def initial_policy():
     waypoints = np.concatenate((waypoints, waypoints[:1]), axis=0) # return to stand
 
     # linear interpolation
-    numpts = 6 # 24 env steps per second, 4 waypoints (one footstep) per second
-    terp = np.linspace(0, 1, numpts)[:-1, np.newaxis]
+    # numpts = 4 # 24 env steps per second, 1 second for cycle, 6 waypoints per cycle
+    numpts = 32 # slower steps, more examples
+    terp = np.linspace(0, 1, numpts+1)[:-1, np.newaxis] # traj towards next waypoint
     positions = []
+    actions = []
     for w in range(len(waypoints)-1):
-        positions.append(terp * waypoints[w] + (1 - terp) * waypoints[w+1])
-    positions.append(waypoints[-1:])
+        positions.append((1 - terp) * waypoints[w] + terp * waypoints[w+1])
+        actions.append(np.tile(waypoints[w+1], (numpts,1)))
     positions = np.concatenate(positions, axis=0)
+    actions = np.concatenate(actions, axis=0)
 
     # sinusoidal time encoding
     t = np.linspace(0, 2*np.pi, len(positions))
     t_encoding = np.stack([np.sin(t), np.cos(t)]).T
 
     # policy examples
-    obs = np.concatenate((positions[:-1], t_encoding[:-1]), axis=1)
-    act = positions[1:]
-
-    print(obs.shape, act.shape)
+    # obs = np.concatenate((positions, t_encoding[:-1]), axis=1) # use time
+    obs = positions # ignore time
+    act = actions
 
     # linear fit
     M = np.linalg.lstsq(obs, act, rcond=None)[0].T
-
-    print(np.mean((M @ obs.T - act.T)**2))
 
     return M
 
@@ -131,10 +146,35 @@ if __name__ == "__main__":
     # a = 0
     # while True:
     #     env.set_position(waypoints[a])
-    #     waypoints[a] = env.mirror_position(waypoints[a])
     #     a = (a+1) % len(waypoints)
     #     input("...")
 
-    # initial hand-picked walk waypoints from poppy-muffin/pybullet/tasks/check/strides.py
+    # # goto waypoints in sim
+    # waypoints = initial_waypoints()
+    # env = PoppyErgoEnv(show=True)
+    # a = 0
+    # input("...")
+    # while True:
+    #     for _ in range(32):
+    #         env.step(waypoints[a])
+    #     a = (a+1) % len(waypoints)
+    #     # input("...")
+
+    # goto policy output in sim
     M = initial_policy()
+    # import matplotlib.pyplot as pt
+    # pt.imshow(M)
+    # pt.show()
+
+    # try policy in sim
+    env = Wrapper(timestep=1/240, control_period=10)
+    env.render("human")
+    obs = env.reset()
+    while True:
+        act = M @ obs
+        print(act)
+        print(obs)
+        obs, reward, done, _ = env.step(act)
+        if done: break
+
 

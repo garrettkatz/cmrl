@@ -62,6 +62,7 @@ def augmented_random_search(
     num_workers, # number of parallel workers for rollouts, should divide N
     save_root_path, # directory to save logging data
     resume_filename = None, # checkpoint filename (None starts from scratch)
+    M = None, # initial policy (None initializes to zero)
 ):
 
     # Initialize one copy of environment per worker
@@ -76,7 +77,7 @@ def augmented_random_search(
         print('Load from %s!' % resume_filename)
     else:
         # Initialize linear policy matrix and observation statistics
-        M = np.zeros((p, n))
+        if M is None: M = np.zeros((p, n))
         mean = np.zeros(n)
         var = np.ones(n)
         nx = 0 # number of samples for online mean/variance calculation        
