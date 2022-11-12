@@ -16,8 +16,8 @@ def train():
     from ars_multiprocessing import augmented_random_search
     augmented_random_search(
         env_maker(timestep, control_period),
-        N = 256,
-        b = 256,
+        N = 25*10,
+        b = 25*10,
         alpha = .01,
         nu = .001,
         num_steps = T,
