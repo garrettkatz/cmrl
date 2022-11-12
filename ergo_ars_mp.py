@@ -23,7 +23,7 @@ def train():
         num_steps = T,
         num_updates = 1000,
         # num_workers = 2, # laptop
-        num_workers = 8, # lab workstation
+        num_workers = 10, # lab workstation
         save_root_path = root_path,
         resume_filename = None,
         M = initial_policy(),
