@@ -7,8 +7,8 @@ from gym.spaces import Space
 
 root_path = 'ergo_ars_results'
 timestep = 1/240
-control_period = 10
-T = 24*6 # 6 seconds, control rate 24 frames per second
+control_period = 60 # 4 position commands per second
+T = 20 # 5 seconds
 
 def train():
 
@@ -16,8 +16,8 @@ def train():
     from ars_multiprocessing import augmented_random_search
     augmented_random_search(
         env_maker(timestep, control_period),
-        N = 100,
-        b = 100,
+        N = 256,
+        b = 256,
         alpha = .01,
         nu = .001,
         num_steps = T,
@@ -26,7 +26,7 @@ def train():
         num_workers = 10, # lab workstation
         save_root_path = root_path,
         resume_filename = None,
-        M = initial_policy(),
+        # M = initial_policy(),
     )
 
 def viz():
