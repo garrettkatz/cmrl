@@ -42,6 +42,9 @@ def run_rollouts(tuple_args):
             if done:
                 break
 
+    # Free env resources to avoid memory leaks
+    env.close()
+
     x = np.stack(all_x)
     nx = x.shape[0] # number of samples
     mean = x.mean(axis=0)
