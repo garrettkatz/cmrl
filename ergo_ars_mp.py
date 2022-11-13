@@ -16,9 +16,9 @@ def train():
     from ars_multiprocessing import augmented_random_search
     augmented_random_search(
         env_maker(timestep, control_period),
-        N = 25*10,
-        b = 25*10,
-        alpha = .01,
+        N = 10*10,
+        b = 10*10,
+        alpha = .001,
         nu = .001,
         num_steps = T,
         num_updates = 1000,
@@ -39,6 +39,12 @@ def show():
 
     from ars_plot import plot_metrics
     plot_metrics(root_path)
+
+    import matplotlib.pyplot as pt
+    with open(os.path.join(root_path, "progress.pkl"), "rb") as f:
+        (metrics, M, mean, var, nx) = pk.load(f)
+    pt.imshow(M)
+    pt.show()
 
 if __name__ == "__main__":
     train()

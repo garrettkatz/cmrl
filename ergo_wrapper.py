@@ -17,6 +17,8 @@ class Wrapper:
         self.action_space = Space(shape=(ERGO_JOINTS,))
         self.observation_space = Space(shape=(ERGO_JOINTS,))
 
+        self.goal_speed = .1 # units/second
+
     def render(self, mode):
         self.show = True if mode == "human" else False
 
@@ -34,6 +36,7 @@ class Wrapper:
             timestep=self.timestep,
             control_period=self.control_period,
             show=self.show,
+            # show=True,
             step_hook=None,
             use_fixed_base=False,
             use_self_collision=False,
@@ -41,28 +44,36 @@ class Wrapper:
 
         # initial position and orientation for assessing reward
         self.start_pos, self.start_orn, _, _ = self.env.get_base()
+        self.num_steps = 0
 
         return self.obs()
 
     def reward(self):
         pos, orn, _, _ = self.env.get_base()
 
-        # Euclidean distances
-        dy = self.start_pos[1] - pos[1] # distance along -y direction
-        dxz = np.sqrt((pos[0]-self.start_pos[0])**2 + (pos[2]-self.start_pos[2])**2) # distance in xz plane
+        # Target position
+        dt = self.num_steps * self.control_period * self.timestep
+        ty = - self.goal_speed * dt # move along -y direction
+        tpos = (self.start_pos[0], ty, self.start_pos[2])
 
-        # Angular change
+        # position error
+        dpos = ((pos[0]-tpos[0])**2 + (pos[1]-tpos[1])**2 + (pos[2]-tpos[2])**2)**.5
+
+        # orientation error
         quat = pb.getDifferenceQuaternion(orn, self.start_orn)
         _, angle = pb.getAxisAngleFromQuaternion(quat)
-        da = abs(angle)
+        dang = abs(angle)
 
-        # reward y distance, penalize other changes to orientation/position
-        return dy - dxz - da
+        # penalize distance from goal position/orientation
+        return -(dpos + dang)
 
     def step(self, action):
         self.env.step(action)
+        self.num_steps += 1
+
         pos, orn, vel, ang = self.env.get_base()
-        done = abs(pos[2] - .43) > .1 # rough threshold for target waist height
+        # done = abs(pos[2] - .43) > .1 # rough threshold for target waist height
+        done = False # let negative rewards accumulate
         return self.obs(), self.reward(), done, None
 
 def env_maker(timestep, control_period):

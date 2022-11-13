@@ -143,7 +143,7 @@ def augmented_random_search(
             # log.add_scalar('Reward', rs.mean(), e)
 
             # Print progress update
-            print(f"update {E+e}/{E+num_updates}: reward ~ {metrics['reward'][-1]:.2f}, " + \
+            print(f"update {E+e}/{E+num_updates}: reward ~ {metrics['reward'][-1]:.2f}, σR = {sigma_R}, " + \
                 f"|μ| ~ {np.fabs(mean).mean():.2f} (nx={nx}), " + \
                 f"|Σ < ∞|={(var < np.inf).sum()}, |Σ| ~ {np.fabs(var[var < np.inf]).mean():.2f}, " + \
                 f"T ~ {metrics['lifetime'][-1]:.2f}, " + \
