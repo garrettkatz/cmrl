@@ -3,7 +3,6 @@ import pickle as pk
 import time
 import numpy as np
 import os, sys
-from gym.spaces import Space
 
 root_path = 'ergo_ars_results'
 timestep = 1/240
@@ -16,12 +15,12 @@ def train():
     from ars_multiprocessing import augmented_random_search
     augmented_random_search(
         env_maker(timestep, control_period),
-        N = 10*10,
-        b = 10*10,
-        alpha = .001,
+        N = 20*10,
+        b = 20*10,
+        alpha = .01,
         nu = .001,
         num_steps = T,
-        num_updates = 1000,
+        num_updates = 2000,
         # num_workers = 2, # laptop
         num_workers = 10, # lab workstation
         save_root_path = root_path,

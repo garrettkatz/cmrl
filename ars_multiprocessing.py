@@ -84,7 +84,7 @@ def augmented_random_search(
         mean = np.zeros(n)
         var = np.ones(n)
         nx = 0 # number of samples for online mean/variance calculation        
-        metrics = {key: [] for key in ('runtime','lifetime','reward')} # Initialize learning metrics
+        metrics = {key: [] for key in ('runtime','lifetime','reward','sigma_R')} # Initialize learning metrics
         print('Train a new model!')
 
     # Updates so far
@@ -139,6 +139,7 @@ def augmented_random_search(
             metrics['runtime'].append(time.perf_counter() - update_start)
             metrics['lifetime'].append(alives.mean())
             metrics['reward'].append(rs.mean())
+            metrics['sigma_R'].append(sigma_R)
             # log.add_scalar('Lifetime', alives.mean(), e)
             # log.add_scalar('Reward', rs.mean(), e)
 
