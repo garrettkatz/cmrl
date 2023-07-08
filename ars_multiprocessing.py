@@ -180,6 +180,8 @@ class DMCWrapper:
     def step(self, action):
         ts = self.env.step(action)
         return (self.obs_array(ts), ts.reward, ts.last(), None)
+    def close(self):
+        pass
 
 def dmc_env_maker(domain_name, task_name):
     def make_env():

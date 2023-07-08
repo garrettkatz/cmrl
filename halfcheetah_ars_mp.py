@@ -8,17 +8,25 @@ import time
 import numpy as np
 import os
 
-# env_name = 'HalfCheetah-v4' # mujoco
-env_name = 'HalfCheetahBulletEnv-v0'
+# mujoco + dm control
+from ars_multiprocessing import dmc_env_maker
+make_env = dmc_env_maker(domain_name="cheetah", task_name="run")
+
+# pybullet
+# env_name = 'HalfCheetahBulletEnv-v0'
+# import pybullet_envs
+# from ars_multiprocessing import gym_env_maker
+# make_env = gym_env_maker(env_name)
+
 root_path = 'half_cheetah_ars_results'
 T = 1000 # max timesteps
 
+
 def train():
 
-    import pybullet_envs
-    from ars_multiprocessing import gym_env_maker, augmented_random_search
+    from ars_multiprocessing import augmented_random_search
     augmented_random_search(
-        gym_env_maker(env_name),
+        make_env,
         N = 8,
         b = 8,
         alpha = .02,
@@ -33,8 +41,7 @@ def train():
 
 def viz():
 
-    import pybullet_envs
-    from ars_multiprocessing import gym_env_maker, visualize
+    from ars_multiprocessing import visualize
     visualize(gym_env_maker(env_name), T, root_path)
 
 def show():
